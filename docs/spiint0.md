@@ -720,36 +720,7 @@ print(f"Min: {min(chunk_lengths)}, Max: {max(chunk_lengths)}, Median: {sorted(ch
 - ✅ Notebook comparing chunking approaches (not notebook run with a local script in scripts/test_chunking or somethin like taht)
 - Decision on optimal chunk size for PostgreSQL docs => pushed back to when we have llm installed and running
 
-```
-ytest -v
-========================================================================= test session starts ==========================================================================
-platform linux -- Python 3.11.8, pytest-7.4.0, pluggy-1.6.0 -- /home/dell-linux-dev3/Projects/techdoc-genie/techdoc-genie-venv/bin/python3
-cachedir: .pytest_cache
-rootdir: /home/dell-linux-dev3/Projects/techdoc-genie
-plugins: anyio-4.12.1
-collected 18 items                                                                                                                                                     
 
-tests/test_chunk_script.py::test_chunk_script_runs PASSED                                                                                                        [  5%]
-tests/test_chunking.py::test_html_loader_produces_text PASSED                                                                                                    [ 11%]
-tests/test_chunking.py::test_chunk_recursive PASSED                                                                                                              [ 16%]
-tests/test_chunking_experiment.py::test_chunking_statistics[256] PASSED                                                                                          [ 22%]
-tests/test_chunking_experiment.py::test_chunking_statistics[512] PASSED                                                                                          [ 27%]
-tests/test_chunking_experiment.py::test_chunking_statistics[1024] PASSED                                                                                         [ 33%]
-tests/test_chunking_single_file.py::test_chunking_strategies[recursive] PASSED                                                                                   [ 38%]
-tests/test_chunking_single_file.py::test_chunking_strategies[token] PASSED                                                                                       [ 44%]
-tests/test_chunking_single_file.py::test_chunking_strategies[semantic] PASSED                                                                                    [ 50%]
-tests/test_ingestion.py::test_document_loader PASSED                                                                                                             [ 55%]
-tests/test_ingestion.py::test_metadata_enrichment PASSED                                                                                                         [ 61%]
-tests/test_utils.py::test_settings_reads_required_openapi_key PASSED                                                                                             [ 66%]
-tests/test_utils.py::test_settings_uses_default_values_when_not_overridden PASSED                                                                                [ 72%]
-tests/test_utils.py::test_settings_overrides_defaults_from_env PASSED                                                                                            [ 77%]
-tests/test_utils.py::test_setup_logger_returns_logger PASSED                                                                                                     [ 83%]
-tests/test_utils.py::test_logger_level_respects_settings PASSED                                                                                                  [ 88%]
-tests/test_utils.py::test_logger_outputs_message PASSED                                                                                                          [ 94%]
-tests/test_utils.py::test_setup_logger_does_not_duplicate_handlers PASSED                                                                                        [100%]
-
-========================================================================== 18 passed in 5.70s ==================
-```
 ---
 
 ### Day 5: Embedding & Vector Store Setup

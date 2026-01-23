@@ -33,25 +33,3 @@ def test_chunking_strategies(admin_doc, strategy):
     # Optional: print a summary
     print(f"\nStrategy: {strategy}, Chunks: {len(chunks)}")
     print(f"First chunk preview:\n{chunks[0].page_content[:200]}...\n")
-
-# @pytest.mark.parametrize("strategy", ["recursive", "token", "semantic"])
-# def test_chunk_metadata_and_content(admin_doc, strategy):
-#     """Ensure chunks have metadata and combined text equals original document."""
-#     chunker = DocumentChunker(chunk_size=200, chunk_overlap=50)
-#     chunks = chunker.chunk_documents(admin_doc, strategy=strategy)
-
-#     # Check that we got some chunks
-#     assert chunks, f"No chunks produced with {strategy} strategy"
-
-#     # Check metadata
-#     for i, chunk in enumerate(chunks):
-#         assert "chunk_id" in chunk.metadata
-#         assert chunk.metadata["chunk_id"] == i
-#         assert "chunk_size" in chunk.metadata
-#         assert chunk.metadata["chunk_size"] == len(chunk.page_content)
-
-#     # Check that the concatenated text matches the original (ignoring minor overlaps)
-#     combined_text = "".join(chunk.page_content for chunk in chunks)
-#     original_text = admin_doc[0].page_content
-#     # Allow some overlap; check that all original text is included
-#     assert original_text in combined_text or combined_text in original_text
