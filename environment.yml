@@ -1,0 +1,31 @@
+name: techdoc-genie
+channels:
+  - pytorch # for faiss-cpu
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.10
+  - pip
+  # Core Dependencies
+  - langchain
+  - langchain-openai
+  - langchain-community
+  - faiss-cpu
+  - sentence-transformers
+  - pypdf
+  - python-dotenv
+  - pydantic
+  - pydantic-settings
+  - fastapi
+  - uvicorn
+  - tiktoken
+  - openai
+  # Development Dependencies
+  - pytest
+  - black
+  - ruff
+  - mypy
+  - jupyter
+  # Pip dependencies (for packages not readily available on conda channels)
+  - pip:
+    - poetry # To read the pyproject.toml if needed, or if other packages are only on PyPI

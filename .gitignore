@@ -1,0 +1,104 @@
+## =========================
+# Python artifacts
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.manifest
+*.spec
+
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+techdoc-genie-venv
+
+# =========================
+# Dependency managers
+# =========================
+# Poetry
+poetry.lock
+# Pipenv
+Pipfile.lock
+
+# =========================
+# Environment files / secrets
+# =========================
+.env
+.env.*         # any other environment variants
+
+# =========================
+# Test / coverage
+# =========================
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# =========================
+# Jupyter / Notebooks
+# =========================
+.ipynb_checkpoints
+
+# =========================
+# IDE / editor
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# macOS
+# =========================
+.DS_Store
+
+# =========================
+# Docker
+# =========================
+docker-compose.override.yml
+**/docker-compose.override.yml
+docker-compose.override.yaml
+**/docker-compose.override.yaml
+*.log
+
+# =========================
+# Data / large files
+# =========================
+data/processed/
+data/vector_store/
+data/raw/postgresql/*.pdf      # if you don't want huge PDFs committed
+data/raw/postgresql/*.html     # optional, if you want to keep raw HTML out of Git
+data/
+tests/test_data/
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# Misc
+# =========================
+*.tmp
+*.bak
+*.swp
