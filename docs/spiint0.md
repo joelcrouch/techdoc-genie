@@ -723,6 +723,101 @@ print(f"Min: {min(chunk_lengths)}, Max: {max(chunk_lengths)}, Median: {sorted(ch
 
 ---
 
+### Day 4.5 LLM interface
+
+Time Estimate: 4-5 hours
+
+Goal
+
+Create a provider-agnostic interface for text generation and embeddings to decouple the ingestion and retrieval pipelines from any specific LLM provider. This allows future integration of OpenAI, Claude, Gemini, or other providers without refactoring downstream code.
+
+Tasks
+
+4.5.1 Implement LLMInterface
+
+Create src/agent/providers/llm_interface.py:
+Provider-agnostic interface for generating text and embeddings
+Uses a MockLLMProvider for local testing
+NotImplementedError for real providers (OpenAI, Claude, Gemini, Local) until implemented
+
+4.5.2 Implement Mock Provider
+
+Create src/agent/providers/mock_provider.py:
+Returns canned responses for text generation
+Returns random vectors for embedding generation
+Enables testing of the ingestion and retrieval pipeline without calling real LLM APIs
+Something like this:
+```
+import random
+
+class MockLLMProvider:
+    def generate_text(self, prompt: str, **kwargs) -> str:
+        return f"Mock Response: {prompt}"
+
+    def embed_texts(self, texts):
+        return [[random.random() for _ in range(8)] for _ in texts]
+```
+
+4.5.3 Write Unit Tests
+
+Create tests/test_llm_interface.py:
+Ensure MockLLMProvider works as expected
+Verify that NotImplementedError is raised for real providers
+Use regex with case-insensitive match to handle provider names
+4.5.4 Outcome
+
+✅ LLMInterface established as a provider-agnostic abstraction
+
+✅ Mock provider allows full testing of downstream pipelines without calling external APIs
+
+✅ Pipeline code is "future-proofed" for OpenAI, Claude, Gemini, or custom local LLM integration
+
+✅ Unit tests verify both mock functionality and correct exception handling
+
+Notes / Next Steps
+
+Once Day 5 embeddings are implemented, LLMInterface can be hooked into ingestion and retrieval pipelines
+
+Real provider integration will require API keys, authentication, and provider-specific client calls
+
+This step ensures our platform is not tightly coupled to any single LLM provider
+
+WHy did i add this in here? My original thougth about day5 included alot of openai specific api calling and i wanted to rm that dependecy/vendor lock in before we started it.  A silly sidequest, but i think it will save us much time in the future.  
+```
+1. Purpose of the sidequest
+
+We want a provider-agnostic interface for any LLM we might use in the future (OpenAI, Claude, Gemini, local Mistral, etc.).
+
+Right now, we don’t need to commit to any one provider — we just need the scaffolding so the rest of the system can call generate_text() and embed_texts() safely.
+
+This lets us develop and test other parts of the system (ingestion, chunking, vector store) without touching any real API keys or models.
+
+2. What we did
+
+Implemented LLMInterface with:
+
+MockLLMProvider that returns fake text and embeddings. ✅
+
+NotImplementedError for all other providers. ✅
+
+Added tests to verify:
+
+mock provider works. ✅
+
+Any “real” provider currently raises a clear NotImplementedError. ✅
+
+Handled edge cases like capitalization mismatches in tests. ✅
+
+3. Why this is useful now
+
+Lets us mock LLM calls in the rest of the pipeline (vectorization, retrieval, ingestion) without depending on OpenAI, Claude, etc.
+
+Ensures future providers can be plugged in easily — just add a class, update the registry/elif, and implement generate_text() / embed_texts().
+
+Keeps our tests and CI clean — no external API calls, no rate limits, no keys.
+
+So in short: we don’t actually need a model running yet. We just now have a stable interface to hook into later. This was all prep work for integration with a real LLM later.
+```
 ### Day 5: Embedding & Vector Store Setup
 
 **Time Estimate**: 6-7 hours
