@@ -32,39 +32,3 @@ class DocumentEmbedder:
     def embed_query(self, query: str) -> List[float]:
         return self.embedder.embed_query(query)
 
-
-# from typing import List
-# from .providers.base import BaseEmbeddingProvider
-# from .providers.gemini import GeminiEmbeddingProvider
-# from .providers.mock import MockEmbeddingProvider
-# from ..utils.config import get_settings
-# from ..utils.logger import setup_logger
-
-# logger = setup_logger(__name__)
-
-# class DocumentEmbedder:
-#     """Provider-agnostic embedding interface."""
-
-#     def __init__(self, provider: str = "gemini", model: str | None = None):
-#         settings = get_settings()
-#         provider = provider.lower()
-
-#         if provider == "gemini":
-#             self.provider: BaseEmbeddingProvider = GeminiEmbeddingProvider(
-#                 model=model or settings.embedding_model,
-#                 api_key=settings.gemini_api_key,
-#             )
-#         elif provider == "mock":
-#             self.provider = MockEmbeddingProvider()
-#         else:
-#             raise NotImplementedError(
-#                 f"Embedding provider '{provider}' not implemented"
-#             )
-
-#         logger.info(f"Initialized embedder with provider={provider}")
-
-#     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-#         return self.provider.embed_documents(texts)
-
-#     def embed_query(self, query: str) -> List[float]:
-#         return self.provider.embed_query(query)
