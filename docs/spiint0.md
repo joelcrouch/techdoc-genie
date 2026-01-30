@@ -804,7 +804,7 @@ Added tests to verify:
 
 mock provider works. ✅
 
-Any “real” provider currently raises a clear NotImplementedError. ✅
+Any “real” provider currently raises a clear NotImplementedError. ✅  (Kinda hackery, but the intent of the src code comes thru)
 
 Handled edge cases like capitalization mismatches in tests. ✅
 
@@ -818,6 +818,7 @@ Keeps our tests and CI clean — no external API calls, no rate limits, no keys.
 
 So in short: we don’t actually need a model running yet. We just now have a stable interface to hook into later. This was all prep work for integration with a real LLM later.
 ```
+
 ### Day 5: Embedding & Vector Store Setup
 
 **Time Estimate**: 6-7 hours
