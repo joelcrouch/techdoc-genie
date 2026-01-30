@@ -17,3 +17,7 @@ ruff==0.1.0
 mypy==1.8.0
 jupyter==1.0.0
 unstructured
+langchain-google-genai
+torch 
+numpy
+huggingface-hub<0.20
