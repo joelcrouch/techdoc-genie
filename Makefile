@@ -37,5 +37,6 @@ ingest:
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
-	rm -rf data/processed/* data/vector_store/*
+# 	rm -rf data/processed/* data/vector_store/*
 
+# Not sure if i want to have the last rm statementn active.  

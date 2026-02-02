@@ -12,3 +12,7 @@ wget -O data/raw/postgresql/postgresql-16-A4.pdf \
   https://www.postgresql.org/files/documentation/pdf/16/postgresql-16-A4.pdf
 
 echo "Documentation downloaded to data/raw/postgresql/"
+
+
+#this scirpt is likely deprecated-put a little bookmakr in your brain and come back when you are sure it the cli component has been thouroughly tested/vetted
+# or keep it forever and forget about it .
