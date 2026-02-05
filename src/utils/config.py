@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     chunk_size: int = 512
     chunk_overlap: int = 50
 
+    #  Ollama Configuration
+    ollama_timeout: int = 180
+    ollama_base_url: str = "http://localhost:11434" # Added for consistency
+
     model_config = ConfigDict(env_file=".env")
 
 

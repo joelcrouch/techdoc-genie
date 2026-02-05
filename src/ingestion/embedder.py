@@ -15,8 +15,8 @@ class DocumentEmbedder:
             logger.info("Using MockEmbedder for testing")
         
         elif self.provider_name == "huggingface":
-            from .providers.huggingface import HuggingFaceEmbedder
-            self.embedder: BaseEmbedder = HuggingFaceEmbedder(model_name=model)
+            from .providers.huggingface import HuggingFaceEmbeddingProvider
+            self.embedder: BaseEmbedder = HuggingFaceEmbeddingProvider(model_name=model)
             logger.info(f"Using HuggingFaceEmbedder with model {model or 'all-MiniLM-L6-v2'}")
 
         # Placeholder for future providers

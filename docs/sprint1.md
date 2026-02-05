@@ -8,7 +8,7 @@
 ## Sprint Goals
 
 ### Primary Objectives
-1. Integrate LangChain with OpenAI GPT-4 for answer generation
+1. Integrate LangChain with OpenAI GPT-4 /local llm for answer generation
 2. Implement citation system linking answers to source documents
 3. Create prompt templates for grounded, accurate responses
 4. Build initial evaluation dataset with ground truth answers
