@@ -18,6 +18,7 @@ mypy==1.8.0
 jupyter==1.0.0
 unstructured
 langchain-google-genai
-torch 
+torch
 numpy
 huggingface-hub<0.20
+click==8.1.7

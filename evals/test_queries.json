@@ -1,0 +1,412 @@
+{
+  "version": "1.0",
+  "created": "2024-01-15",
+  "description": "Evaluation dataset for PostgreSQL documentation RAG system",
+  "queries": [
+    {
+      "id": "q001",
+      "query": "How do I create an index in PostgreSQL?",
+      "category": "DDL",
+      "difficulty": "easy",
+      "expected_topics": ["CREATE INDEX", "index types", "B-tree", "performance"],
+      "ground_truth": "Use CREATE INDEX statement. Basic syntax: CREATE INDEX index_name ON table_name (column_name). Supports various index types including B-tree (default), Hash, GiST, and GIN.",
+      "context_keywords": ["index", "CREATE INDEX", "btree", "performance"]
+    },
+    {
+      "id": "q002",
+      "query": "What's the difference between INNER JOIN and LEFT JOIN?",
+      "category": "SQL",
+      "difficulty": "easy",
+      "expected_topics": ["JOIN types", "NULL handling", "query examples"],
+      "ground_truth": "INNER JOIN returns only rows with matching values in both tables. LEFT JOIN returns all rows from left table and matched rows from right table, with NULLs for non-matching right table columns.",
+      "context_keywords": ["JOIN", "INNER JOIN", "LEFT JOIN", "NULL"]
+    },
+    {
+      "id": "q003",
+      "query": "How do I configure connection pooling in PostgreSQL?",
+      "category": "administration",
+      "difficulty": "medium",
+      "expected_topics": ["max_connections", "connection pooling", "pgbouncer", "configuration"],
+      "ground_truth": "PostgreSQL itself doesn't have built-in connection pooling. Configure max_connections parameter in postgresql.conf. For connection pooling, use external tools like PgBouncer or Pgpool-II.",
+      "context_keywords": ["max_connections", "postgresql.conf", "connection"]
+    },
+    {
+      "id": "q004",
+      "query": "What is MVCC and how does it work?",
+      "category": "architecture",
+      "difficulty": "hard",
+      "expected_topics": ["MVCC", "concurrency", "transactions", "tuple versioning"],
+      "ground_truth": "Multi-Version Concurrency Control (MVCC) allows multiple transaction versions of data. Each transaction sees a snapshot of the database. Readers don't block writers and vice versa. Uses tuple versioning and transaction IDs.",
+      "context_keywords": ["MVCC", "concurrency", "transaction", "snapshot"]
+    },
+    {
+      "id": "q005",
+      "query": "How do I back up a PostgreSQL database?",
+      "category": "administration",
+      "difficulty": "easy",
+      "expected_topics": ["pg_dump", "backup", "restore", "pg_dumpall"],
+      "ground_truth": "Use pg_dump for single database backup: pg_dump dbname > backup.sql. Use pg_dumpall for all databases. For point-in-time recovery, configure WAL archiving and use pg_basebackup.",
+      "context_keywords": ["pg_dump", "backup", "restore", "WAL"]
+    },
+    {
+  "id": "q006",
+  "query": "How do I create a table with a foreign key constraint?",
+  "category": "DDL",
+  "difficulty": "easy",
+  "expected_topics": ["CREATE TABLE", "FOREIGN KEY", "REFERENCES", "constraints"],
+  "ground_truth": "Use CREATE TABLE with a FOREIGN KEY constraint using REFERENCES to link to a primary key in another table.",
+  "context_keywords": ["FOREIGN KEY", "REFERENCES", "constraint"]
+},
+{
+  "id": "q007",
+  "query": "How can I check the size of a PostgreSQL database?",
+  "category": "administration",
+  "difficulty": "easy",
+  "expected_topics": ["pg_database_size", "database size", "disk usage"],
+  "ground_truth": "Use pg_database_size() function, often combined with pg_size_pretty(), to check database size.",
+  "context_keywords": ["pg_database_size", "disk", "size"]
+},
+{
+  "id": "q008",
+  "query": "What is VACUUM and why is it needed?",
+  "category": "maintenance",
+  "difficulty": "medium",
+  "expected_topics": ["VACUUM", "dead tuples", "MVCC", "autovacuum"],
+  "ground_truth": "VACUUM reclaims storage occupied by dead tuples created by MVCC. It prevents table bloat and maintains performance. Autovacuum runs automatically.",
+  "context_keywords": ["VACUUM", "dead tuples", "autovacuum"]
+},
+{
+  "id": "q009",
+  "query": "How do I update rows using data from another table?",
+  "category": "SQL",
+  "difficulty": "medium",
+  "expected_topics": ["UPDATE", "FROM clause", "JOIN"],
+  "ground_truth": "Use UPDATE with a FROM clause to join another table and update rows based on matching conditions.",
+  "context_keywords": ["UPDATE", "FROM", "JOIN"]
+},
+{
+  "id": "q010",
+  "query": "What are CTEs and when should I use them?",
+  "category": "SQL",
+  "difficulty": "medium",
+  "expected_topics": ["CTE", "WITH clause", "readability", "query planning"],
+  "ground_truth": "Common Table Expressions (CTEs) defined using WITH improve readability and structure. Prior to PostgreSQL 12 they acted as optimization fences.",
+  "context_keywords": ["CTE", "WITH", "query"]
+},
+{
+  "id": "q011",
+  "query": "How do I analyze query performance in PostgreSQL?",
+  "category": "performance",
+  "difficulty": "medium",
+  "expected_topics": ["EXPLAIN", "EXPLAIN ANALYZE", "query plan"],
+  "ground_truth": "Use EXPLAIN or EXPLAIN ANALYZE to view query execution plans and identify performance bottlenecks.",
+  "context_keywords": ["EXPLAIN", "ANALYZE", "query plan"]
+},
+{
+  "id": "q012",
+  "query": "What is the difference between DELETE and TRUNCATE?",
+  "category": "SQL",
+  "difficulty": "easy",
+  "expected_topics": ["DELETE", "TRUNCATE", "transactions", "performance"],
+  "ground_truth": "DELETE removes rows individually and is transactional. TRUNCATE removes all rows quickly, is not row-level logged, and cannot be rolled back in the same way.",
+  "context_keywords": ["DELETE", "TRUNCATE", "transaction"]
+},
+{
+  "id": "q013",
+  "query": "How do I enable and use pg_stat_statements?",
+  "category": "performance",
+  "difficulty": "hard",
+  "expected_topics": ["pg_stat_statements", "shared_preload_libraries", "query statistics"],
+  "ground_truth": "Enable pg_stat_statements by adding it to shared_preload_libraries and creating the extension. It tracks execution statistics for SQL statements.",
+  "context_keywords": ["pg_stat_statements", "shared_preload_libraries"]
+},
+{
+  "id": "q014",
+  "query": "What are PostgreSQL schemas and why use them?",
+  "category": "architecture",
+  "difficulty": "easy",
+  "expected_topics": ["schemas", "namespace", "search_path"],
+  "ground_truth": "Schemas provide namespaces to organize database objects and avoid naming conflicts. Controlled using search_path.",
+  "context_keywords": ["schema", "search_path", "namespace"]
+},
+{
+  "id": "q015",
+  "query": "How do I perform an UPSERT in PostgreSQL?",
+  "category": "SQL",
+  "difficulty": "medium",
+  "expected_topics": ["INSERT", "ON CONFLICT", "UPSERT"],
+  "ground_truth": "Use INSERT ... ON CONFLICT to perform an UPSERT, allowing updates when a constraint violation occurs.",
+  "context_keywords": ["UPSERT", "ON CONFLICT", "INSERT"]
+},
+{
+  "id": "q016",
+  "query": "What is WAL and how does it work?",
+  "category": "architecture",
+  "difficulty": "hard",
+  "expected_topics": ["WAL", "durability", "crash recovery", "replication"],
+  "ground_truth": "Write-Ahead Logging (WAL) ensures durability by logging changes before applying them. Used for crash recovery and replication.",
+  "context_keywords": ["WAL", "durability", "recovery"]
+},
+{
+  "id": "q017",
+  "query": "How do I grant read-only access to a user?",
+  "category": "security",
+  "difficulty": "easy",
+  "expected_topics": ["GRANT", "privileges", "roles"],
+  "ground_truth": "Use GRANT SELECT on tables or schemas to give a user read-only access.",
+  "context_keywords": ["GRANT", "SELECT", "roles"]
+},
+{
+  "id": "q018",
+  "query": "What are JSON and JSONB types in PostgreSQL?",
+  "category": "data types",
+  "difficulty": "medium",
+  "expected_topics": ["JSON", "JSONB", "indexing", "performance"],
+  "ground_truth": "JSON stores raw JSON text, while JSONB stores a binary format optimized for querying and indexing.",
+  "context_keywords": ["JSON", "JSONB", "index"]
+},
+{
+  "id": "q019",
+  "query": "How does PostgreSQL handle transactions and isolation levels?",
+  "category": "architecture",
+  "difficulty": "hard",
+  "expected_topics": ["transactions", "isolation levels", "READ COMMITTED", "SERIALIZABLE"],
+  "ground_truth": "PostgreSQL supports multiple isolation levels with READ COMMITTED as default. It uses MVCC to manage concurrent transactions.",
+  "context_keywords": ["transaction", "isolation", "MVCC"]
+},
+{
+  "id": "q020",
+  "query": "How do I create a partial index?",
+  "category": "DDL",
+  "difficulty": "medium",
+  "expected_topics": ["partial index", "WHERE clause", "performance"],
+  "ground_truth": "Create a partial index using CREATE INDEX with a WHERE clause to index only a subset of rows.",
+  "context_keywords": ["partial index", "WHERE", "CREATE INDEX"]
+},
+{
+  "id": "q021",
+  "query": "What is table bloat and how can it be reduced?",
+  "category": "maintenance",
+  "difficulty": "hard",
+  "expected_topics": ["table bloat", "VACUUM", "REINDEX"],
+  "ground_truth": "Table bloat occurs due to dead tuples from MVCC. It can be reduced using VACUUM, autovacuum tuning, or REINDEX.",
+  "context_keywords": ["bloat", "VACUUM", "REINDEX"]
+},
+{
+  "id": "q022",
+  "query": "How do I list all indexes on a table?",
+  "category": "administration",
+  "difficulty": "easy",
+  "expected_topics": ["pg_indexes", "system catalogs"],
+  "ground_truth": "Query the pg_indexes system catalog or use \\d in psql to list indexes on a table.",
+  "context_keywords": ["pg_indexes", "index", "system catalog"]
+},
+{
+  "id": "q023",
+  "query": "What is logical replication in PostgreSQL?",
+  "category": "replication",
+  "difficulty": "hard",
+  "expected_topics": ["logical replication", "publications", "subscriptions"],
+  "ground_truth": "Logical replication replicates data changes using a publish/subscribe model, allowing selective table replication.",
+  "context_keywords": ["logical replication", "publication", "subscription"]
+},
+{
+  "id": "q024",
+  "query": "How do I change a column data type?",
+  "category": "DDL",
+  "difficulty": "easy",
+  "expected_topics": ["ALTER TABLE", "ALTER COLUMN", "TYPE"],
+  "ground_truth": "Use ALTER TABLE ... ALTER COLUMN ... TYPE to change a column's data type, optionally using USING for casts.",
+  "context_keywords": ["ALTER TABLE", "ALTER COLUMN", "TYPE"]
+},
+{
+  "id": "q025",
+  "query": "What is the difference between COUNT(*) and COUNT(column)?",
+  "category": "SQL",
+  "difficulty": "easy",
+  "expected_topics": ["COUNT", "NULL handling", "aggregation"],
+  "ground_truth": "COUNT(*) counts all rows, while COUNT(column) counts only non-NULL values in that column.",
+  "context_keywords": ["COUNT", "NULL", "aggregate"]
+},
+{
+  "id": "q026",
+  "query": "How do I create a composite primary key?",
+  "category": "DDL",
+  "difficulty": "easy",
+  "expected_topics": ["PRIMARY KEY", "composite key", "constraints"],
+  "ground_truth": "Define a PRIMARY KEY constraint on multiple columns using PRIMARY KEY (col1, col2, ...)",
+  "context_keywords": ["PRIMARY KEY", "composite", "constraint"]
+},
+{
+  "id": "q027",
+  "query": "What triggers are and how do I create one?",
+  "category": "DDL",
+  "difficulty": "medium",
+  "expected_topics": ["triggers", "CREATE TRIGGER", "trigger functions", "BEFORE/AFTER"],
+  "ground_truth": "Triggers automatically execute functions in response to events (INSERT, UPDATE, DELETE). Created using CREATE TRIGGER with a trigger function.",
+  "context_keywords": ["trigger", "CREATE TRIGGER", "function"]
+},
+{
+  "id": "q028",
+  "query": "How can I optimize a slow query that uses multiple joins?",
+  "category": "performance",
+  "difficulty": "hard",
+  "expected_topics": ["query optimization", "JOIN order", "indexes", "EXPLAIN"],
+  "ground_truth": "Analyze with EXPLAIN ANALYZE, add appropriate indexes on join columns, consider JOIN order, use CTEs for clarity, and update statistics with ANALYZE.",
+  "context_keywords": ["optimization", "JOIN", "index", "EXPLAIN"]
+},
+{
+  "id": "q029",
+  "query": "What's the difference between CHAR, VARCHAR, and TEXT?",
+  "category": "data types",
+  "difficulty": "easy",
+  "expected_topics": ["character types", "CHAR", "VARCHAR", "TEXT", "storage"],
+  "ground_truth": "CHAR(n) is fixed-length and pads with spaces. VARCHAR(n) is variable-length with a limit. TEXT is variable-length with no specified limit. In PostgreSQL, there's little performance difference.",
+  "context_keywords": ["CHAR", "VARCHAR", "TEXT", "data type"]
+},
+{
+  "id": "q030",
+  "query": "How do I create a materialized view and refresh it?",
+  "category": "DDL",
+  "difficulty": "medium",
+  "expected_topics": ["materialized view", "CREATE MATERIALIZED VIEW", "REFRESH"],
+  "ground_truth": "Use CREATE MATERIALIZED VIEW to create a view with stored results. Refresh using REFRESH MATERIALIZED VIEW, optionally with CONCURRENTLY.",
+  "context_keywords": ["materialized view", "REFRESH", "CONCURRENTLY"]
+},
+{
+  "id": "q031",
+  "query": "What are window functions and how do they differ from GROUP BY?",
+  "category": "SQL",
+  "difficulty": "hard",
+  "expected_topics": ["window functions", "OVER", "PARTITION BY", "GROUP BY"],
+  "ground_truth": "Window functions perform calculations across sets of rows related to the current row without collapsing rows like GROUP BY. They use OVER clause with optional PARTITION BY and ORDER BY.",
+  "context_keywords": ["window function", "OVER", "PARTITION BY"]
+},
+{
+  "id": "q032",
+  "query": "How do I handle NULL values in WHERE clauses?",
+  "category": "SQL",
+  "difficulty": "easy",
+  "expected_topics": ["NULL", "IS NULL", "IS NOT NULL", "COALESCE"],
+  "ground_truth": "Use IS NULL or IS NOT NULL operators. Cannot use = NULL. Use COALESCE to provide default values for NULL.",
+  "context_keywords": ["NULL", "IS NULL", "COALESCE"]
+},
+{
+  "id": "q033",
+  "query": "What is the purpose of ANALYZE and when should I run it?",
+  "category": "maintenance",
+  "difficulty": "medium",
+  "expected_topics": ["ANALYZE", "statistics", "query planner", "autovacuum"],
+  "ground_truth": "ANALYZE collects statistics about table contents for the query planner. Run after bulk data changes. Autovacuum runs it automatically.",
+  "context_keywords": ["ANALYZE", "statistics", "planner"]
+},
+{
+  "id": "q034",
+  "query": "How do I implement row-level security in PostgreSQL?",
+  "category": "security",
+  "difficulty": "hard",
+  "expected_topics": ["row-level security", "RLS", "policies", "ALTER TABLE"],
+  "ground_truth": "Enable RLS using ALTER TABLE ... ENABLE ROW LEVEL SECURITY, then create policies using CREATE POLICY to control row access per user.",
+  "context_keywords": ["row-level security", "RLS", "policy"]
+},
+{
+  "id": "q035",
+  "query": "What's the difference between UNION and UNION ALL?",
+  "category": "SQL",
+  "difficulty": "easy",
+  "expected_topics": ["UNION", "UNION ALL", "duplicates", "performance"],
+  "ground_truth": "UNION removes duplicate rows, UNION ALL keeps all rows including duplicates. UNION ALL is faster as it doesn't require duplicate checking.",
+  "context_keywords": ["UNION", "UNION ALL", "duplicates"]
+},
+{
+  "id": "q036",
+  "query": "How do I configure PostgreSQL for high availability?",
+  "category": "administration",
+  "difficulty": "hard",
+  "expected_topics": ["high availability", "streaming replication", "failover", "standby servers"],
+  "ground_truth": "Set up streaming replication with standby servers, configure WAL archiving, use tools like Patroni or repmgr for automatic failover.",
+  "context_keywords": ["high availability", "replication", "failover"]
+},
+{
+  "id": "q037",
+  "query": "What are ARRAY types and how do I query them?",
+  "category": "data types",
+  "difficulty": "medium",
+  "expected_topics": ["ARRAY", "array operations", "ANY", "ALL"],
+  "ground_truth": "PostgreSQL supports ARRAY data types. Query using array operators, ANY/ALL for membership, and array functions like array_agg.",
+  "context_keywords": ["ARRAY", "ANY", "array_agg"]
+},
+{
+  "id": "q038",
+  "query": "How do I create a unique constraint on multiple columns?",
+  "category": "DDL",
+  "difficulty": "easy",
+  "expected_topics": ["UNIQUE", "constraint", "multiple columns"],
+  "ground_truth": "Use UNIQUE (col1, col2, ...) in CREATE TABLE or ADD CONSTRAINT UNIQUE to create a composite unique constraint.",
+  "context_keywords": ["UNIQUE", "constraint", "composite"]
+},
+{
+  "id": "q039",
+  "query": "What are the different types of indexes available in PostgreSQL?",
+  "category": "DDL",
+  "difficulty": "medium",
+  "expected_topics": ["index types", "B-tree", "Hash", "GiST", "GIN", "BRIN"],
+  "ground_truth": "PostgreSQL supports B-tree (default), Hash, GiST (generalized search trees), GIN (inverted indexes), BRIN (block range), and SP-GiST.",
+  "context_keywords": ["index types", "B-tree", "GIN", "GiST", "BRIN"]
+},
+{
+  "id": "q040",
+  "query": "How do I use transactions with BEGIN, COMMIT, and ROLLBACK?",
+  "category": "SQL",
+  "difficulty": "easy",
+  "expected_topics": ["transactions", "BEGIN", "COMMIT", "ROLLBACK", "ACID"],
+  "ground_truth": "Use BEGIN to start a transaction, COMMIT to save changes, ROLLBACK to undo. Transactions ensure ACID properties.",
+  "context_keywords": ["transaction", "BEGIN", "COMMIT", "ROLLBACK"]
+},
+{
+  "id": "q041",
+  "query": "What is a sequence and how do I use it for auto-incrementing IDs?",
+  "category": "DDL",
+  "difficulty": "easy",
+  "expected_topics": ["SEQUENCE", "SERIAL", "nextval", "auto-increment"],
+  "ground_truth": "Sequences generate unique numbers. Use SERIAL or BIGSERIAL types, or create with CREATE SEQUENCE and use nextval() function.",
+  "context_keywords": ["SEQUENCE", "SERIAL", "nextval"]
+},
+{
+  "id": "q042",
+  "query": "How do I find and kill long-running queries?",
+  "category": "administration",
+  "difficulty": "medium",
+  "expected_topics": ["pg_stat_activity", "pg_terminate_backend", "query monitoring"],
+  "ground_truth": "Query pg_stat_activity to find long-running queries, then use pg_terminate_backend(pid) or pg_cancel_backend(pid) to stop them.",
+  "context_keywords": ["pg_stat_activity", "pg_terminate_backend", "long-running"]
+},
+{
+  "id": "q043",
+  "query": "What's the difference between a view and a materialized view?",
+  "category": "DDL",
+  "difficulty": "medium",
+  "expected_topics": ["VIEW", "MATERIALIZED VIEW", "performance", "storage"],
+  "ground_truth": "A view is a virtual table that executes its query each time it's accessed. A materialized view stores the query results and must be refreshed to update.",
+  "context_keywords": ["view", "materialized view", "REFRESH"]
+},
+{
+  "id": "q044",
+  "query": "How do I use regular expressions in PostgreSQL queries?",
+  "category": "SQL",
+  "difficulty": "medium",
+  "expected_topics": ["regex", "~", "SIMILAR TO", "regexp_replace"],
+  "ground_truth": "Use ~ operator for regex matching, ~* for case-insensitive. Functions include regexp_replace, regexp_split_to_array, and SIMILAR TO for SQL standard patterns.",
+  "context_keywords": ["regex", "~", "regexp_replace"]
+},
+{
+  "id": "q045",
+  "query": "What are tablespaces and when should I use them?",
+  "category": "administration",
+  "difficulty": "medium",
+  "expected_topics": ["tablespaces", "storage", "CREATE TABLESPACE"],
+  "ground_truth": "Tablespaces allow storing database objects on different file systems or disks. Useful for managing I/O, separating data types, or utilizing faster storage.",
+  "context_keywords": ["tablespace", "storage", "disk"]
+}
+  ]
+}

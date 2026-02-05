@@ -5,7 +5,7 @@ from src.ingestion.document_loader import DocumentLoader
 from src.ingestion.chunker import DocumentChunker
 from src.ingestion.providers.huggingface import HuggingFaceEmbeddingProvider
 from src.retrieval.vector_store import VectorStore
-from scripts.chunking_configs import CHUNKING_CONFIGS
+from src.ingestion.chunking_configs import CHUNKING_CONFIGS
 
 
 def main():
