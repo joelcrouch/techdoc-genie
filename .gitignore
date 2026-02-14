@@ -104,3 +104,9 @@ logs/
 *.swp
 techdocchat.txt
 techdocchattxt1.txt
+# =========================
+# Evaluation Results
+# =========================
+evals/results/
+evals/cache/
+*.pkl
