@@ -1,0 +1,24 @@
+{
+  "document_paths": {
+    "postgresql": "/home/dell-linux-dev3/Projects/techdoc-genie/data/raw/postgresql/postgresql-16-A4.pdf"
+  },
+  "test_queries_path": "evals/test_queries.json",
+  "llm_configs": [
+    {
+      "provider": "ollama",
+      "model_id": "phi3:mini"
+    }
+  ],
+  "embedder_config": {
+    "provider": "huggingface",
+    "model": "sentence-transformers/all-MiniLM-L6-v2"
+  },
+  "chunking_strategies": [
+    {
+      "name": "Recursive_256_Overlap_30",
+      "chunk_size": 256,
+      "chunk_overlap": 30,
+      "method": "chunk_recursive"
+    }
+  ]
+}
