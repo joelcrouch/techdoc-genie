@@ -7,6 +7,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from datetime import datetime
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from tqdm import tqdm
@@ -269,13 +270,19 @@ def process_single_query(
     semantic_similarity = None
     llm_answer = ""
     num_sources = 0
+    llm_response_time = None # Initialize to None
 
     try:
         if not ground_truth:
-            logger.warning(f"No ground_truth found for query '{query_item['id']}'. Skipping similarity score.")
+            logger.warning(f"No ground_truth found for query '{query_item['id']}'. Skipping LLM call.")
             llm_answer = "N/A - No ground truth"
+            llm_response_time = 0.0 # No LLM call made
         else:
+            start_time = time.perf_counter() # Start timing
             result = rag_chain.query_with_citations(query)
+            end_time = time.perf_counter()   # End timing
+            llm_response_time = end_time - start_time # Calculate duration
+
             llm_answer = result.get("answer", "")
 
             if llm_answer:
@@ -283,13 +290,14 @@ def process_single_query(
                 similarity_score = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
                 semantic_similarity = float(similarity_score)
             else:
-                semantic_similarity = 0.0 # If no answer, similarity is 0
+                semantic_similarity = 0.0 # If LLM answers empty, similarity is 0
             num_sources = len(result.get("citations", []))
             
     except Exception as e:
         logger.error(f"Error during RAG query for '{query}' with {llm_provider}/{llm_model_id} and {strategy_name}: {e}")
         llm_answer = f"ERROR: {str(e)}"
         semantic_similarity = None
+        llm_response_time = None # Indicate that the call failed
         num_sources = 0
         
     return {
@@ -306,6 +314,7 @@ def process_single_query(
         "llm_answer": llm_answer,
         "semantic_similarity_score": semantic_similarity,
         "num_sources": num_sources,
+        "llm_response_time": llm_response_time, # Add new field
         # Placeholders for manual scoring
         "manual_relevance_score": None,
         "manual_groundedness_score": None,
@@ -343,10 +352,14 @@ def display_and_save_all_results(all_results: List[Dict[str, Any]], embedder_con
 
         logger.info(f"\n--- Results for: Doc={doc_name}, LLM={llm_provider}/{llm_model_id}, Strategy={strategy_name} ---")
 
-        # Calculate average semantic similarity for the experiment
-        valid_scores = [r['semantic_similarity_score'] for r in experiment_results 
-                        if r['semantic_similarity_score'] is not None and not str(r['llm_answer']).startswith("ERROR")] # Filter out errors
-        avg_semantic_similarity = np.mean(valid_scores) if valid_scores else 0.0
+        # Calculate average semantic similarity and LLM response time for the experiment
+        valid_semantic_scores = [r['semantic_similarity_score'] for r in experiment_results 
+                                 if r['semantic_similarity_score'] is not None and not str(r['llm_answer']).startswith("ERROR")] # Filter out errors
+        avg_semantic_similarity = np.mean(valid_semantic_scores) if valid_semantic_scores else 0.0
+
+        valid_response_times = [r['llm_response_time'] for r in experiment_results
+                                if r['llm_response_time'] is not None and r['llm_response_time'] > 0] # Filter out 0 for "No LLM call" and None for errors
+        avg_llm_response_time = np.mean(valid_response_times) if valid_response_times else 0.0
 
         num_queries_with_ground_truth = sum(1 for r in experiment_results if r['ground_truth'])
         num_queries_answered = sum(1 for r in experiment_results if r['llm_answer'] and not str(r['llm_answer']).startswith("ERROR"))
@@ -358,11 +371,12 @@ def display_and_save_all_results(all_results: List[Dict[str, Any]], embedder_con
             f"{llm_provider}/{llm_model_id}",
             strategy_name,
             f"{avg_semantic_similarity:.4f}",
-            f"{answer_rate:.2f}%"
+            f"{answer_rate:.2f}%",
+            f"{avg_llm_response_time:.2f}s"
         ])
 
         # Print detailed table for this experiment
-        headers = ["Query ID", "Query", "Semantic Similarity", "Num Sources", "Answer"]
+        headers = ["Query ID", "Query", "Semantic Similarity", "Num Sources", "LLM Response Time", "Answer"]
         table_data = []
         for res in experiment_results:
             table_data.append([
@@ -370,6 +384,7 @@ def display_and_save_all_results(all_results: List[Dict[str, Any]], embedder_con
                 res['query'][:50] + '...' if len(res['query']) > 50 else res['query'],
                 f"{res['semantic_similarity_score']:.4f}" if res['semantic_similarity_score'] is not None else "N/A",
                 res['num_sources'],
+                f"{res['llm_response_time']:.2f}s" if res['llm_response_time'] is not None else "N/A",
                 res['llm_answer'][:70] + '...' if len(res['llm_answer']) > 70 else res['llm_answer']
             ])
         print(tabulate(table_data, headers=headers, tablefmt="grid"))
@@ -396,7 +411,8 @@ def display_and_save_all_results(all_results: List[Dict[str, Any]], embedder_con
                 "embedder_model": embedder_config.get("model"),
                 "total_queries_evaluated": len(experiment_results),
                 "average_semantic_similarity": float(avg_semantic_similarity),
-                "answer_rate": float(answer_rate)
+                "answer_rate": float(answer_rate),
+                "average_llm_response_time": float(avg_llm_response_time)
             },
             "results": experiment_results
         }
@@ -409,7 +425,7 @@ def display_and_save_all_results(all_results: List[Dict[str, Any]], embedder_con
     print("\n\n" + "="*120)
     print("--- OVERALL EXPERIMENT SUMMARY ---")
     print("="*120)
-    overall_headers = ["Document", "LLM", "Chunking Strategy", "Avg Semantic Sim.", "Answer Rate"]
+    overall_headers = ["Document", "LLM", "Chunking Strategy", "Avg Semantic Sim.", "Answer Rate", "Avg LLM Response Time"]
     print(tabulate(overall_summary_table_data, headers=overall_headers, tablefmt="grid"))
 
 
