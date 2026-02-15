@@ -86,19 +86,21 @@ def interactive_query(provider: str, model_id: str, prompt_type: str, vector_sto
 
 
 if __name__ == "__main__":
+    settings = get_settings() # Import and get settings here
+
     parser = argparse.ArgumentParser(description="Interactive RAG Query Interface")
     parser.add_argument(
         "--provider", 
         type=str, 
-        default="ollama", 
-        choices=["ollama", "openai"],
+        default=settings.llm_default_provider, # Use configurable default
+        choices=["ollama", "openai", "claude", "gemini"],
         help="The LLM provider to use."
     )
     parser.add_argument(
         "--model",
         type=str,
-        default="phi3:mini",
-        help="The model ID to use (e.g., 'phi3:mini', 'gpt-4-turbo-preview')."
+        default=settings.llm_default_model_id, # Use configurable default
+        help="The model ID to use (e.g., 'phi3:mini', 'gpt-4-turbo-preview', 'claude-3-opus-20240229', 'gemini-pro')."
     )
     parser.add_argument(
         "--prompt",
@@ -114,8 +116,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     
-    # Automatically set the default model for openai if not specified
-    if args.provider == "openai" and args.model == "phi3:mini":
-        args.model = "gpt-4-turbo-preview"
+    # The default model setting is now handled by settings.llm_default_model_id
+    # No need for this specific override anymore.
 
     interactive_query(args.provider, args.model, args.prompt, args.vector_store)

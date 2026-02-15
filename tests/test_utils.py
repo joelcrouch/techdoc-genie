@@ -36,7 +36,7 @@ def test_settings_uses_default_values_when_not_overridden(monkeypatch):
 
     settings = get_settings()
 
-    assert settings.embedding_model == "text-embedding-3-small"
+    assert settings.embedding_model == "all-MiniLM-L6-v2"
     assert settings.vector_store_path == "./data/vector_store"
     assert settings.chunk_size == 512
     assert settings.chunk_overlap == 50
