@@ -14,16 +14,8 @@
       "model_id": "qwen2.5:1.5b"
     },
     {
-      "provider": "openai",
-      "model_id": "gpt-4-turbo-preview"
-    },
-    {
-      "provider": "claude",
-      "model_id": "claude-3-opus-20240229"
-    },
-    {
       "provider": "gemini",
-      "model_id": "gemini-pro"
+      "model_id": "gemini-2.5-flash-lite"
     }
   ],
   "embedder_config": {

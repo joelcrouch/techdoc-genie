@@ -41,7 +41,7 @@ class RAGChain:
                 model_name=model_id,
                 api_key=self.settings.OPENAI_API_KEY
             )
-            self1.llm = CustomLLM(llm_provider=openai_provider, model_name=model_id)
+            self.llm = CustomLLM(llm_provider=openai_provider, model_name=model_id)
             logger.info(f"Initialized RAG chain with OpenAI model: {model_id}")
         elif llm_provider_type.lower() == "ollama":
             ollama_provider = OllamaProvider(

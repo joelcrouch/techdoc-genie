@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     claude_timeout: int = 180 # Timeout for Claude API calls
 
     # Google Gemini Configuration
-    gemini_model_id: str = "gemini-pro" # Default Gemini model for non-evaluation contexts
+    gemini_model_id: str = "gemini-2.5-flash-lite"
     gemini_base_url: str = "https://generativelanguage.googleapis.com" # Gemini API base URL
     gemini_timeout: int = 180 # Timeout for Gemini API calls
 
