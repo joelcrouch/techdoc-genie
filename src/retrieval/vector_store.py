@@ -1,35 +1,3 @@
-# from typing import List, Tuple, Optional
-# from pathlib import Path
-# from langchain.schema import Document
-# from langchain_community.vectorstores import FAISS
-# from ..ingestion.embedder import DocumentEmbedder
-# from ..utils.logger import setup_logger
-# from ..utils.config import get_settings
-
-# logger = setup_logger(__name__)
-
-# class VectorStore:
-#     def __init__(
-#         self,
-#         persist_path: str | None = None,
-#         embedder: DocumentEmbedder | None = None,
-#     ):
-#         settings = get_settings()
-#         self.persist_path = Path(persist_path or settings.vector_store_path)
-#         self.persist_path.mkdir(parents=True, exist_ok=True)
-
-#         self.embedder = embedder or DocumentEmbedder(provider="gemini")
-#         self.vectorstore = None
-
-#     def create_from_documents(self, documents: List[Document]) -> None:
-#         logger.info(f"Creating vector store from {len(documents)} documents")
-
-#         self.vectorstore = FAISS.from_documents(
-#             documents=documents,
-#             embedding=self.embedder.provider,  # 👈 interface only
-#         )
-
-
 #src/retrieval/vector_store.py
 from typing import List, Tuple, Optional
 from pathlib import Path

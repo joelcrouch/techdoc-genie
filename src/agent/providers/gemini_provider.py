@@ -54,7 +54,7 @@ class GeminiProvider(BaseLLMProvider):
         except HTTPError as e:
             if e.response.status_code == 429:
                 logger.warning(f"Gemini API rate limit hit (429). Retrying in 6 seconds... for model {self.model_name}.")
-                time.sleep(6)
+                time.sleep(6)            
                 try:
                     result = _execute_request() # Retry once after waiting
                 except Exception as retry_e:

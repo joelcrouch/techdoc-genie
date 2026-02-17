@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List, Literal
 from langchain.schema import Document
 from langchain_community.document_loaders import PyPDFLoader
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag, NavigableString
 import re
 
 from ..utils.logger import setup_logger
@@ -43,7 +43,10 @@ class DocumentLoader:
                 self._add_metadata(doc, html_file)
                 documents.append(doc)
         
-        logger.info(f"Loaded {len(documents)} HTML documents")
+        if not documents:
+            logger.warning(f"No HTML files found or processed in {self.data_dir}")
+        else:
+            logger.info(f"Loaded {len(documents)} HTML documents")
         return documents
     
     def _html_to_text(self, html_content: str) -> str:
@@ -52,29 +55,33 @@ class DocumentLoader:
         
         # Remove boilerplate elements
         for tag in soup(["script", "style", "nav", "footer", "header", "form", "input"]):
-            tag.decompose()
+            if tag.parent: # Ensure tag has a parent before decomposing
+                tag.decompose()
         
         lines = []
-        if soup.body:
-            for elem in soup.body.descendants:
-                if elem.name and elem.name.startswith("h") and elem.get_text(strip=True):
-                    # Convert headings to Markdown style
-                    level = int(elem.name[1])
-                    heading_text = elem.get_text(strip=True)
-                    lines.append(f"{'#' * level} {heading_text}")
-                
-                elif elem.name == "p" and elem.get_text(strip=True):
-                    lines.append(elem.get_text(strip=True))
-                
-                elif elem.name in ["li", "dt", "dd"] and elem.get_text(strip=True):
-                    lines.append(elem.get_text(strip=True))
-                
-                elif elem.string and not elem.name:
-                    text = elem.string.strip()
-                    if text:
-                        lines.append(text)
         
-        return "\n\n".join(lines)
+        if soup.body:
+            # Iterate through the direct children of the body
+            for element in soup.body.children:
+                if isinstance(element, Tag):
+                    if element.name.startswith("h") and element.get_text(strip=True):
+                        level = int(element.name[1])
+                        heading_text = element.get_text(strip=True)
+                        lines.append(f"{'#' * level} {heading_text}")
+                    elif element.name == "p" and element.get_text(strip=True):
+                        lines.append(element.get_text(strip=True))
+                    elif element.name in ["ul", "ol"]:
+                        for li in element.find_all("li"):
+                            if li.get_text(strip=True):
+                                lines.append(li.get_text(strip=True))
+                    elif element.name in ["dt", "dd"] and element.get_text(strip=True):
+                        lines.append(element.get_text(strip=True))
+                elif isinstance(element, NavigableString) and element.strip(): # Handle direct text nodes under body
+                    lines.append(element.strip())
+
+
+        cleaned_lines = [line for line in lines if line.strip()]
+        return "\n\n".join(cleaned_lines)
     
     def load_pdfs(self) -> List[Document]:
         """Load PDFs, optionally splitting into logical sections."""
@@ -212,7 +219,7 @@ class DocumentLoader:
             return True
         
         # Numbered headings (1., 1.1, 1.1.1, etc.)
-        if re.match(r'^\d+(\.\d+)*\.?\s+[A-Z]', line):
+        if re.match(r'^\d+(\.\d+)*\.\s+[A-Z]', line):
             return True
         
         # All caps with at least 3 words and not too long
@@ -228,7 +235,8 @@ class DocumentLoader:
             not line.endswith('.') and 
             not line.endswith(',') and
             len(words) <= 10 and
-            len(words) >= 2):
+            len(words) >= 3 and # Changed from >=2 to >=3
+            not any(char.isdigit() for char in line)): # Added: must not contain digits
             # Check if it looks like a title (mostly capitalized words)
             capitalized_count = sum(1 for word in words if word and word[0].isupper())
             if capitalized_count / len(words) > 0.5:
