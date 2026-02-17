@@ -73,6 +73,72 @@ The join condition is specified in the ON or USING clause, or implicitly by the 
 
 ================================================================================
 
+Openai example
+```
+ python src/agent/query_interface.py --provider gemini --model gemini-2.5-flash-lite
+2026-02-17 11:34:28,162 - __main__ - INFO - Loading vector store...
+2026-02-17 11:34:30,807 - src.ingestion.embedder - INFO - Using HuggingFaceEmbedder with model all-MiniLM-L6-v2
+2026-02-17 11:34:31,111 - src.retrieval.vector_store - INFO - Vector store loaded from data/vector_store/vectorstore_chunk512_overlap50/vectorstore_chunk512_overlap50
+2026-02-17 11:34:31,112 - __main__ - INFO - Vector store 'vectorstore_chunk512_overlap50' loaded successfully from data/vector_store/vectorstore_chunk512_overlap50.
+2026-02-17 11:34:31,112 - __main__ - INFO - Initializing RAG chain with provider 'gemini' and model 'gemini-2.5-flash-lite'...
+2026-02-17 11:34:31,112 - src.agent.rag_chain - INFO - Initialized RAG chain with Gemini model: gemini-2.5-flash-lite
+2026-02-17 11:34:31,112 - src.agent.rag_chain - INFO - RAG chain fully initialized with provider 'gemini' and retriever.
+
+================================================================================
+Technical Documentation Assistant
+Provider: gemini, Model: gemini-2.5-flash-lite, Prompt: base
+Vector Store: vectorstore_chunk512_overlap50
+Type 'exit' or 'quit' to end.
+================================================================================
+
+
+Your question: difference between a left join and middle join
+
+🔍 Searching documentation and generating answer...
+2026-02-17 11:34:51,229 - src.agent.rag_chain - INFO - Processing query: difference between a left join and middle join
+2026-02-17 11:34:53,440 - src.agent.rag_chain - INFO - Generated response with 5 sources.
+
+================================================================================
+ANSWER:
+────────────────────────────────────────────────────────────────────────────────
+I don't have enough information
+
+================================================================================
+SOURCES (5):
+────────────────────────────────────────────────────────────────────────────────
+
+[1] [1] postgresql-16-A4.pdf, Page N/A
+    of the joined table by inserting null values for the right-hand columns. Note that only the JOIN
+clause's own condition is considered while deciding which rows have matches. Outer conditions
+are appli...
+
+[2] [2] postgresql-16-A4.pdf, Page N/A
+    binds more tightly than the commas separating FROM-list items. All the JOIN options are just a
+notational convenience, since they do nothing you couldn't do with plain FROM and WHERE.
+LEFT OUTER JOIN ...
+
+[3] [3] postgresql-16-A4.pdf, Page N/A
+    # RIGHT OUTER JOIN
+Section: RIGHT OUTER JOIN
+
+First, an inner join is performed. Then, for each row in T2 that does not satisfy the join
+condition with any row in T1, a joined row is added with null v...
+
+[4] [4] postgresql-16-A4.pdf, Page N/A
+    JOIN binds more tightly than comma. For example FROM T1 CROSS JOIN T2
+INNER JOIN T3 ON condition is not the same as FROM T1, T2 INNER JOIN
+115
+Queries
+T3 ON condition because the condition can referen...
+
+[5] [5] postgresql-16-A4.pdf, Page N/A
+    FULL OUTER JOIN returns all the joined rows, plus one row for each unmatched left-hand row
+(extended with nulls on the right), plus one row for each unmatched right-hand row (extended
+with nulls on th...
+
+================================================================================
+```
+
 
 Your question: 
 

@@ -84,8 +84,8 @@ def interactive_query(provider: str, model_id: str, prompt_type: str, vector_sto
             print("Sorry, an error occurred. Please check the logs for more details.")
             print("="*80)
 
-
-if __name__ == "__main__":
+def cli_main():
+    """Main function for the interactive CLI."""
     settings = get_settings() # Import and get settings here
 
     parser = argparse.ArgumentParser(description="Interactive RAG Query Interface")
@@ -116,7 +116,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     
-    # The default model setting is now handled by settings.llm_default_model_id
-    # No need for this specific override anymore.
-
     interactive_query(args.provider, args.model, args.prompt, args.vector_store)
+
+if __name__ == "__main__":
+    cli_main()
