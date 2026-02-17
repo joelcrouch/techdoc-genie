@@ -109,4 +109,5 @@ techdocchattxt1.txt
 # =========================
 evals/results/
 evals/cache/
+evals/visualizations/
 *.pkl

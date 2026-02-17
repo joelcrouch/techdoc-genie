@@ -148,7 +148,7 @@ def run_rag_evaluation_parallel(filter_provider: Optional[str] = None, filter_mo
 
     # --- 4. Iterate Through Documents, LLMs, and Chunking Strategies ---
     for doc_name, doc_path in document_paths.items():
-        logger.info(f"\n--- Processing Document: {doc_name} ---")
+        logger.info(f"--- Processing Document: {doc_name} ---")
         pdf_path = Path(doc_path)
         if not pdf_path.exists():
             logger.error(f"Document not found at {doc_path}. Skipping this document.")
@@ -164,7 +164,7 @@ def run_rag_evaluation_parallel(filter_provider: Optional[str] = None, filter_mo
         for llm_config in llm_configs:
             llm_provider = llm_config.get("provider")
             llm_model_id = llm_config.get("model_id")
-            logger.info(f"\n--- Testing LLM: {llm_provider}/{llm_model_id} ---")
+            logger.info(f"--- Testing LLM: {llm_provider}/{llm_model_id} ---")
 
             for chunk_strategy in chunking_strategies:
                 strategy_name = chunk_strategy['name']
@@ -172,39 +172,19 @@ def run_rag_evaluation_parallel(filter_provider: Optional[str] = None, filter_mo
                 chunk_overlap = chunk_strategy['chunk_overlap']
                 chunk_method_name = chunk_strategy['method']
 
-                logger.info(f"\n--- Evaluating Strategy: {strategy_name} ---")
+                logger.info(f"--- Evaluating Strategy: {strategy_name} ---")
 
-                # --- a) Build or Load Vector Store (cached per strategy) ---
-                vector_store_cache_path = Path("evals/cache") / f"vector_store_{doc_name}_{strategy_name}.pkl"
+                # --- a) Load Vector Store (cached per strategy) ---
+                vector_store_cache_path = Path("evals/cache") / f"vector_store_{get_file_name_from_path(doc_name)}_{strategy_name}.pkl"
                 vector_store = None
                 if vector_store_cache_path.exists():
                     logger.info(f"Loading cached vector store for {strategy_name} from {vector_store_cache_path}")
                     with open(vector_store_cache_path, 'rb') as f:
                         vector_store = pickle.load(f)
                 else:
-                    chunker = DocumentChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-                    if chunk_method_name == "chunk_semantic":
-                        logger.warning("Semantic chunking not yet fully implemented, falling back to recursive.")
-                        chunking_method = getattr(chunker, "chunk_recursive") # Fallback for now
-                    else:
-                        chunking_method = getattr(chunker, chunk_method_name)
-                    
-                    chunks = chunking_method(source_documents)
-                    logger.info(f"Created {len(chunks)} chunks.")
-
-                    logger.info("Creating in-memory vector store...")
-                    try:
-                        vector_store = VectorStore(embedder=doc_embedder)
-                        vector_store.create_from_documents(chunks)
-                        logger.info("In-memory vector store created successfully.")
-                        # Cache the vector store
-                        vector_store_cache_path.parent.mkdir(parents=True, exist_ok=True)
-                        with open(vector_store_cache_path, 'wb') as f:
-                            pickle.dump(vector_store, f)
-                        logger.info(f"Vector store cached to {vector_store_cache_path}")
-                    except Exception as e:
-                        logger.error(f"Failed to create vector store for strategy '{strategy_name}': {e}", exc_info=True)
-                        continue # Skip to next chunking strategy if vector store creation fails
+                    logger.error(f"Cached vector store for strategy '{strategy_name}' (Document: {doc_name}) not found at {vector_store_cache_path}.")
+                    logger.error("Please run 'python evals/build_vectorstores.py' first to pre-build all vector stores.")
+                    continue # Skip to next chunking strategy if vector store is not found
 
                 # --- c) Initialize RAG chain ---
                 # Access ollama_timeout from get_settings() if provider is ollama
@@ -360,7 +340,7 @@ def display_and_save_all_results(all_results: List[Dict[str, Any]], embedder_con
             grouped_results[key] = []
         grouped_results[key].append(res)
 
-    print("\n\n" + "="*120)
+    print("" + "="*120)
     print("--- OVERALL ENHANCED RAG ANSWER QUALITY EVALUATION SUMMARY ---")
     print("="*120)
 
@@ -370,7 +350,7 @@ def display_and_save_all_results(all_results: List[Dict[str, Any]], embedder_con
     for key_tuple, experiment_results in grouped_results.items():
         doc_name, llm_provider, llm_model_id, strategy_name = key_tuple
 
-        logger.info(f"\n--- Results for: Doc={doc_name}, LLM={llm_provider}/{llm_model_id}, Strategy={strategy_name} ---")
+        logger.info(f"--- Results for: Doc={doc_name}, LLM={llm_provider}/{llm_model_id}, Strategy={strategy_name} ---")
 
         # Calculate average semantic similarity and LLM response time for the experiment
         valid_semantic_scores = [r['semantic_similarity_score'] for r in experiment_results 
@@ -442,7 +422,7 @@ def display_and_save_all_results(all_results: List[Dict[str, Any]], embedder_con
             
         logger.info(f"Detailed results for experiment 'Doc={doc_name}, LLM={llm_provider}/{llm_model_id}, Strategy={strategy_name}' saved to: {output_filename}")
 
-    print("\n\n" + "="*120)
+    print("" + "="*120)
     print("--- OVERALL EXPERIMENT SUMMARY ---")
     print("="*120)
     overall_headers = ["Document", "LLM", "Chunking Strategy", "Avg Semantic Sim.", "Answer Rate", "Avg LLM Response Time"]

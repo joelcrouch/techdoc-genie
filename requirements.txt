@@ -22,3 +22,6 @@ torch
 numpy
 huggingface-hub<0.20
 click==8.1.7
+pandas
+matplotlib
+seaborn

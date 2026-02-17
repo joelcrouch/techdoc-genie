@@ -10,6 +10,9 @@ from ..utils.config import get_settings
 # New imports for our modular architecture
 from .llm_wrapper import CustomLLM
 from .providers.ollama_provider import OllamaProvider
+from .providers.openai_provider import OpenAIProvider
+from .providers.claude_provider import ClaudeProvider
+from .providers.gemini_provider import GeminiProvider
 from .prompts import get_prompt_template
 from .citation_manager import CitationManager, ResponseFormatter
 
@@ -34,11 +37,11 @@ class RAGChain:
         
         # Initialize LLM based on the provider type
         if llm_provider_type.lower() == "openai":
-            self.llm = ChatOpenAI(
-                model=model_id,
-                temperature=temperature,
-                openai_api_key=self.settings.openai_api_key
+            openai_provider = OpenAIProvider(
+                model_name=model_id,
+                api_key=self.settings.OPENAI_API_KEY
             )
+            self.llm = CustomLLM(llm_provider=openai_provider, model_name=model_id)
             logger.info(f"Initialized RAG chain with OpenAI model: {model_id}")
         elif llm_provider_type.lower() == "ollama":
             ollama_provider = OllamaProvider(
@@ -47,8 +50,23 @@ class RAGChain:
             )
             self.llm = CustomLLM(llm_provider=ollama_provider, model_name=model_id)
             logger.info(f"Initialized RAG chain with Ollama model: {model_id}")
+        elif llm_provider_type.lower() == "claude":
+            claude_provider = ClaudeProvider(
+                model_name=model_id,
+                api_key=self.settings.ANTHROPIC_API_KEY
+            )
+            self.llm = CustomLLM(llm_provider=claude_provider, model_name=model_id)
+            logger.info(f"Initialized RAG chain with Claude model: {model_id}")
+        elif llm_provider_type.lower() == "gemini":
+            gemini_provider = GeminiProvider(
+                model_name=model_id,
+                api_key=self.settings.GEMINI_API_KEY
+            )
+            self.llm = CustomLLM(llm_provider=gemini_provider, model_name=model_id)
+            logger.info(f"Initialized RAG chain with Gemini model: {model_id}")
         else:
             raise ValueError(f"Unsupported LLM provider type: {llm_provider_type}")
+
         
         # Create retriever from the vector store
         self.retriever = self.vector_store.vectorstore.as_retriever(
