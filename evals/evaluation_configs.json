@@ -1,6 +1,7 @@
 {
   "document_paths": {
-    "postgresql": "/home/dell-linux-dev3/Projects/techdoc-genie/data/raw/postgresql/postgresql-16-A4.pdf"
+    "postgresql": "/home/dell-linux-dev3/Projects/techdoc-genie/data/raw/postgresql/postgresql-16-A4.pdf",
+    "postgresql_html": "data/raw/postgresql"
     
   },
   "test_queries_path": "evals/test_queries.json",
