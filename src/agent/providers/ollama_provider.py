@@ -44,21 +44,29 @@ class OllamaProvider(BaseLLMProvider):
     def generate_text(self, prompt: str, **kwargs: Any) -> str:
         """
         Generates a response from the Ollama model.
+
+        Accepts an optional ``timeout`` kwarg (seconds) to override the
+        global ``ollama_timeout`` setting for a single call.  Useful when
+        a caller (e.g. the faithfulness judge) needs a tighter budget.
         """
         messages = [{"role": "user", "content": prompt}]
-        
+
         payload = {
             "model": self.model_name,
             "messages": messages,
             "stream": False,
             "options": {
                 "temperature": kwargs.get("temperature", 0.0),
-                "num_ctx": kwargs.get("max_tokens", 2048) # Map max_tokens to num_ctx for context window
-            }
+                "num_ctx": kwargs.get("max_tokens", 2048),
+            },
         }
-        
+
+        timeout = kwargs.get("timeout", self.settings.ollama_timeout)
+
         try:
-            response = requests.post(f"{self.base_url}/api/chat", json=payload, timeout=self.settings.ollama_timeout)
+            response = requests.post(
+                f"{self.base_url}/api/chat", json=payload, timeout=timeout
+            )
             response.raise_for_status()
             
             result = response.json()

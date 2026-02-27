@@ -111,3 +111,6 @@ evals/results/
 evals/cache/
 evals/visualizations/
 *.pkl
+
+
+docs/dontaddotgit/

@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.ingestion.document_loader import DocumentLoader
 from src.ingestion.chunker import DocumentChunker
+from evals.metrics.faithfulness import FaithfulnessScorer, FaithfulnessResult
 from src.ingestion.providers.huggingface import HuggingFaceEmbeddingProvider
 from src.retrieval.vector_store import VectorStore
 from src.agent.rag_chain import RAGChain
@@ -75,7 +76,12 @@ def get_file_name_from_path(file_path: str) -> str:
 
 # --- MAIN EVALUATION SCRIPT ---
 
-def run_rag_evaluation_parallel(filter_provider: Optional[str] = None, filter_model: Optional[str] = None):
+def run_rag_evaluation_parallel(
+    filter_provider: Optional[str] = None,
+    filter_model: Optional[str] = None,
+    skip_faithfulness: bool = False,
+    judge_timeout: int = 60,
+):
     """
     Loads evaluation configurations, iterates through documents, LLM configs,
     and chunking strategies, running test queries in parallel and evaluating
@@ -195,6 +201,27 @@ def run_rag_evaluation_parallel(filter_provider: Optional[str] = None, filter_mo
                 )
                 logger.info(f"RAG chain initialized with {llm_provider}/{llm_model_id}")
 
+                # --- c2) Initialize faithfulness scorer (Ollama-backed, one per experiment) ---
+                # Always use the local phi3:mini as the judge regardless of which LLM
+                # is being evaluated — keeps the judge consistent across experiments.
+                faithfulness_scorer: Optional[FaithfulnessScorer] = None
+                if skip_faithfulness:
+                    logger.info("Faithfulness scoring skipped (--skip-faithfulness).")
+                else:
+                    try:
+                        faithfulness_scorer = FaithfulnessScorer(
+                            judge_timeout=judge_timeout
+                        )
+                        logger.info(
+                            f"FaithfulnessScorer initialised "
+                            f"(judge_timeout={judge_timeout}s)."
+                        )
+                    except Exception as faith_init_err:
+                        logger.warning(
+                            f"Could not initialise FaithfulnessScorer "
+                            f"({faith_init_err}). Faithfulness will be skipped."
+                        )
+
                 # --- d) Checkpoint Management for current experiment ---
                 experiment_id = f"{doc_name}_{llm_provider}_{llm_model_id}_{strategy_name}"
                 checkpoint_file = CHECKPOINT_DIR / f"checkpoint_{experiment_id}.pkl"
@@ -217,12 +244,15 @@ def run_rag_evaluation_parallel(filter_provider: Optional[str] = None, filter_mo
                 queries_processed_count = [len(completed_ids)] # Mutable counter for checkpointing
 
                 with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-                    futures = {executor.submit(process_single_query, 
-                                                query_item, 
-                                                rag_chain, 
-                                                similarity_model,
-                                                doc_name, llm_provider, llm_model_id, strategy_name, chunk_size, chunk_overlap, chunk_method_name
-                                                ): query_item for query_item in remaining_queries}
+                    futures = {executor.submit(
+                        process_single_query,
+                        query_item,
+                        rag_chain,
+                        similarity_model,
+                        doc_name, llm_provider, llm_model_id,
+                        strategy_name, chunk_size, chunk_overlap, chunk_method_name,
+                        faithfulness_scorer,
+                    ): query_item for query_item in remaining_queries}
                     
                     with tqdm(total=len(remaining_queries), desc=f"Experiment '{experiment_id}'", unit="query") as pbar:
                         for future in as_completed(futures):
@@ -252,54 +282,94 @@ def run_rag_evaluation_parallel(filter_provider: Optional[str] = None, filter_mo
 
 
 def process_single_query(
-    query_item: Dict[str, Any], 
-    rag_chain: RAGChain, 
-    similarity_model: SentenceTransformer, 
+    query_item: Dict[str, Any],
+    rag_chain: RAGChain,
+    similarity_model: SentenceTransformer,
     doc_name: str,
     llm_provider: str,
     llm_model_id: str,
     strategy_name: str,
     chunk_size: int,
     chunk_overlap: int,
-    chunk_method_name: str
+    chunk_method_name: str,
+    faithfulness_scorer: Optional[FaithfulnessScorer] = None,
 ) -> Dict[str, Any]:
     """Processes a single query through the RAG chain and evaluates it."""
     query = query_item['query']
     ground_truth = query_item.get('ground_truth', '')
-    
+
     semantic_similarity = None
     llm_answer = ""
     num_sources = 0
-    llm_response_time = None # Initialize to None
+    llm_response_time = None
+    retrieved_chunks: List[str] = []      # raw text of each retrieved chunk
+    faithfulness_data: Dict[str, Any] = {
+        "faithfulness_score": None,
+        "num_claims": None,
+        "num_supported": None,
+        "num_unsupported": None,
+        "num_undecided": None,
+        "faithfulness_verdicts": None,
+        "faithfulness_error": None,
+    }
 
     try:
         if not ground_truth:
             logger.warning(f"No ground_truth found for query '{query_item['id']}'. Skipping LLM call.")
             llm_answer = "N/A - No ground truth"
-            llm_response_time = 0.0 # No LLM call made
+            llm_response_time = 0.0
         else:
-            start_time = time.perf_counter() # Start timing
+            start_time = time.perf_counter()
             result = rag_chain.query_with_citations(query)
-            end_time = time.perf_counter()   # End timing
-            llm_response_time = end_time - start_time # Calculate duration
+            end_time = time.perf_counter()
+            llm_response_time = end_time - start_time
 
             llm_answer = result.get("answer", "")
+            citations = result.get("citations", [])
+            num_sources = len(citations)
+
+            # Extract the full text of every retrieved chunk so we can
+            # compute faithfulness and, later, context precision/recall.
+            retrieved_chunks = [
+                c.get("full_content", c.get("snippet", ""))
+                for c in citations
+                if c.get("full_content") or c.get("snippet")
+            ]
 
             if llm_answer:
                 embeddings = similarity_model.encode([llm_answer, ground_truth])
-                similarity_score = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
+                similarity_score = cosine_similarity(
+                    [embeddings[0]], [embeddings[1]]
+                )[0][0]
                 semantic_similarity = float(similarity_score)
+
+                # --- Faithfulness ---
+                if faithfulness_scorer is not None and retrieved_chunks:
+                    try:
+                        faith_result: FaithfulnessResult = faithfulness_scorer.score(
+                            answer=llm_answer,
+                            context_chunks=retrieved_chunks,
+                        )
+                        faithfulness_data = faith_result.as_dict()
+                    except Exception as faith_err:
+                        logger.error(
+                            f"Faithfulness scoring failed for query "
+                            f"'{query_item['id']}': {faith_err}"
+                        )
+                        faithfulness_data["faithfulness_error"] = str(faith_err)
             else:
-                semantic_similarity = 0.0 # If LLM answers empty, similarity is 0
-            num_sources = len(result.get("citations", []))
-            
+                semantic_similarity = 0.0
+
     except Exception as e:
-        logger.error(f"Error during RAG query for '{query}' with {llm_provider}/{llm_model_id} and {strategy_name}: {e}")
+        logger.error(
+            f"Error during RAG query for '{query}' with "
+            f"{llm_provider}/{llm_model_id} and {strategy_name}: {e}"
+        )
         llm_answer = f"ERROR: {str(e)}"
         semantic_similarity = None
-        llm_response_time = None # Indicate that the call failed
+        llm_response_time = None
         num_sources = 0
-        
+
     return {
         "document": doc_name,
         "llm_provider": llm_provider,
@@ -312,10 +382,12 @@ def process_single_query(
         "query": query,
         "ground_truth": ground_truth,
         "llm_answer": llm_answer,
+        "retrieved_chunks": retrieved_chunks,
         "semantic_similarity_score": semantic_similarity,
         "num_sources": num_sources,
-        "llm_response_time": llm_response_time, # Add new field
-        # Placeholders for manual scoring
+        "llm_response_time": llm_response_time,
+        **faithfulness_data,
+        # Placeholders for future manual scoring
         "manual_relevance_score": None,
         "manual_groundedness_score": None,
         "manual_completeness_score": None,
@@ -352,50 +424,81 @@ def display_and_save_all_results(all_results: List[Dict[str, Any]], embedder_con
 
         logger.info(f"--- Results for: Doc={doc_name}, LLM={llm_provider}/{llm_model_id}, Strategy={strategy_name} ---")
 
-        # Calculate average semantic similarity and LLM response time for the experiment
-        valid_semantic_scores = [r['semantic_similarity_score'] for r in experiment_results 
-                                 if r['semantic_similarity_score'] is not None and not str(r['llm_answer']).startswith("ERROR")] # Filter out errors
+        # Calculate aggregate metrics for the experiment
+        non_error = [
+            r for r in experiment_results
+            if not str(r['llm_answer']).startswith("ERROR")
+        ]
+
+        valid_semantic_scores = [
+            r['semantic_similarity_score'] for r in non_error
+            if r['semantic_similarity_score'] is not None
+        ]
         avg_semantic_similarity = np.mean(valid_semantic_scores) if valid_semantic_scores else 0.0
 
-        valid_response_times = [r['llm_response_time'] for r in experiment_results
-                                if r['llm_response_time'] is not None and r['llm_response_time'] > 0] # Filter out 0 for "No LLM call" and None for errors
+        valid_faith_scores = [
+            r['faithfulness_score'] for r in non_error
+            if r.get('faithfulness_score') is not None
+        ]
+        avg_faithfulness = np.mean(valid_faith_scores) if valid_faith_scores else None
+
+        valid_response_times = [
+            r['llm_response_time'] for r in experiment_results
+            if r['llm_response_time'] is not None and r['llm_response_time'] > 0
+        ]
         avg_llm_response_time = np.mean(valid_response_times) if valid_response_times else 0.0
 
         num_queries_with_ground_truth = sum(1 for r in experiment_results if r['ground_truth'])
-        num_queries_answered = sum(1 for r in experiment_results if r['llm_answer'] and not str(r['llm_answer']).startswith("ERROR"))
-        
-        answer_rate = (num_queries_answered / num_queries_with_ground_truth * 100) if num_queries_with_ground_truth > 0 else 0.0
+        num_queries_answered = sum(
+            1 for r in experiment_results
+            if r['llm_answer'] and not str(r['llm_answer']).startswith("ERROR")
+        )
+        answer_rate = (
+            (num_queries_answered / num_queries_with_ground_truth * 100)
+            if num_queries_with_ground_truth > 0 else 0.0
+        )
 
+        faith_str = f"{avg_faithfulness:.4f}" if avg_faithfulness is not None else "N/A"
         overall_summary_table_data.append([
             doc_name,
             f"{llm_provider}/{llm_model_id}",
             strategy_name,
             f"{avg_semantic_similarity:.4f}",
+            faith_str,
             f"{answer_rate:.2f}%",
-            f"{avg_llm_response_time:.2f}s"
+            f"{avg_llm_response_time:.2f}s",
         ])
 
         # Print detailed table for this experiment
-        headers = ["Query ID", "Query", "Semantic Similarity", "Num Sources", "LLM Response Time", "Answer"]
+        headers = [
+            "Query ID", "Query", "Sem.Sim", "Faithful", "Sources",
+            "Latency", "Answer",
+        ]
         table_data = []
         for res in experiment_results:
+            faith_val = res.get('faithfulness_score')
             table_data.append([
                 res['query_id'],
-                res['query'][:50] + '...' if len(res['query']) > 50 else res['query'],
-                f"{res['semantic_similarity_score']:.4f}" if res['semantic_similarity_score'] is not None else "N/A",
+                res['query'][:45] + '…' if len(res['query']) > 45 else res['query'],
+                f"{res['semantic_similarity_score']:.3f}" if res['semantic_similarity_score'] is not None else "N/A",
+                f"{faith_val:.3f}" if faith_val is not None else "N/A",
                 res['num_sources'],
-                f"{res['llm_response_time']:.2f}s" if res['llm_response_time'] is not None else "N/A",
-                res['llm_answer'][:70] + '...' if len(res['llm_answer']) > 70 else res['llm_answer']
+                f"{res['llm_response_time']:.1f}s" if res['llm_response_time'] is not None else "N/A",
+                res['llm_answer'][:65] + '…' if len(res['llm_answer']) > 65 else res['llm_answer'],
             ])
         print(tabulate(table_data, headers=headers, tablefmt="grid"))
-        
+
         # Save full results for this experiment to JSON
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         embedder_name_for_filename = embedder_config.get("provider", "unknown_embedder")
-        output_filename = f"evals/results/{get_file_name_from_path(doc_name)}_{llm_provider.replace('/', '_')}_{llm_model_id.replace('/', '_')}_{strategy_name}_{embedder_name_for_filename}_results_{timestamp}.json"
-        
+        output_filename = (
+            f"evals/results/{get_file_name_from_path(doc_name)}_"
+            f"{llm_provider.replace('/', '_')}_{llm_model_id.replace('/', '_')}_"
+            f"{strategy_name}_{embedder_name_for_filename}_results_{timestamp}.json"
+        )
+
         Path(output_filename).parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Prepare output data for JSON
         output_data = {
             "metadata": {
@@ -411,10 +514,11 @@ def display_and_save_all_results(all_results: List[Dict[str, Any]], embedder_con
                 "embedder_model": embedder_config.get("model"),
                 "total_queries_evaluated": len(experiment_results),
                 "average_semantic_similarity": float(avg_semantic_similarity),
+                "average_faithfulness": float(avg_faithfulness) if avg_faithfulness is not None else None,
                 "answer_rate": float(answer_rate),
-                "average_llm_response_time": float(avg_llm_response_time)
+                "average_llm_response_time": float(avg_llm_response_time),
             },
-            "results": experiment_results
+            "results": experiment_results,
         }
 
         with open(output_filename, 'w') as f:
@@ -425,7 +529,10 @@ def display_and_save_all_results(all_results: List[Dict[str, Any]], embedder_con
     print("" + "="*120)
     print("--- OVERALL EXPERIMENT SUMMARY ---")
     print("="*120)
-    overall_headers = ["Document", "LLM", "Chunking Strategy", "Avg Semantic Sim.", "Answer Rate", "Avg LLM Response Time"]
+    overall_headers = [
+        "Document", "LLM", "Chunking Strategy",
+        "Avg Sem.Sim", "Avg Faithful", "Answer Rate", "Avg Latency",
+    ]
     print(tabulate(overall_summary_table_data, headers=overall_headers, tablefmt="grid"))
 
 
@@ -436,13 +543,36 @@ if __name__ == "__main__":
     parser.add_argument(
         "--provider",
         type=str,
-        help="Optional: Filter evaluation to a specific LLM provider (e.g., 'ollama', 'openai', 'claude', 'gemini')."
+        help="Filter to a specific LLM provider (e.g. 'ollama', 'gemini').",
     )
     parser.add_argument(
         "--model",
         type=str,
-        help="Optional: Filter evaluation to a specific LLM model ID (e.g., 'phi3:mini', 'gpt-4-turbo-preview', 'gemini-pro'). Requires --provider to be specified."
+        help="Filter to a specific model ID. Requires --provider.",
+    )
+    parser.add_argument(
+        "--skip-faithfulness",
+        action="store_true",
+        help=(
+            "Skip the faithfulness judge step. "
+            "Useful when Ollama is running on CPU (slow) or for quick sanity runs. "
+            "Retrieved chunks are still captured in the result JSON."
+        ),
+    )
+    parser.add_argument(
+        "--judge-timeout",
+        type=int,
+        default=60,
+        help=(
+            "Per-call timeout in seconds for the faithfulness judge LLM. "
+            "Default 60 s. Increase if running on CPU and calls are timing out."
+        ),
     )
     args = parser.parse_args()
 
-    run_rag_evaluation_parallel(args.provider, args.model)
+    run_rag_evaluation_parallel(
+        filter_provider=args.provider,
+        filter_model=args.model,
+        skip_faithfulness=args.skip_faithfulness,
+        judge_timeout=args.judge_timeout,
+    )

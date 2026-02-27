@@ -59,25 +59,20 @@ class DocumentLoader:
                 tag.decompose()
         
         lines = []
-        
+
         if soup.body:
-            # Iterate through the direct children of the body
-            for element in soup.body.children:
-                if isinstance(element, Tag):
-                    if element.name.startswith("h") and element.get_text(strip=True):
-                        level = int(element.name[1])
-                        heading_text = element.get_text(strip=True)
-                        lines.append(f"{'#' * level} {heading_text}")
-                    elif element.name == "p" and element.get_text(strip=True):
-                        lines.append(element.get_text(strip=True))
-                    elif element.name in ["ul", "ol"]:
-                        for li in element.find_all("li"):
-                            if li.get_text(strip=True):
-                                lines.append(li.get_text(strip=True))
-                    elif element.name in ["dt", "dd"] and element.get_text(strip=True):
-                        lines.append(element.get_text(strip=True))
-                elif isinstance(element, NavigableString) and element.strip(): # Handle direct text nodes under body
-                    lines.append(element.strip())
+            # Find all content elements anywhere in the document tree (handles nested divs)
+            for element in soup.body.find_all(
+                ["h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "dt", "dd"]
+            ):
+                text = element.get_text(strip=True)
+                if not text:
+                    continue
+                if element.name.startswith("h"):
+                    level = int(element.name[1])
+                    lines.append(f"{'#' * level} {text}")
+                else:
+                    lines.append(text)
 
 
         cleaned_lines = [line for line in lines if line.strip()]

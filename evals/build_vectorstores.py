@@ -52,7 +52,7 @@ def build_all_vector_stores_from_config():
     logger.info("Initializing HuggingFace embedder for vector store...")
     if embedder_config.get("provider") == "huggingface":
         doc_embedder_provider = HuggingFaceEmbeddingProvider(model_name=embedder_config.get("model"))
-        doc_embedder = doc_embedder_provider.model # Get the actual embedder instance
+        doc_embedder = doc_embedder_provider  # HuggingFaceEmbeddingProvider implements BaseEmbedder
     else:
         logger.error(f"Unsupported embedder provider: {embedder_config.get('provider')}")
         sys.exit(1)
@@ -62,16 +62,31 @@ def build_all_vector_stores_from_config():
     # --- 3. Iterate Through Documents and Chunking Strategies ---
     for doc_name, doc_path in document_paths.items():
         logger.info(f"--- Processing Document: {doc_name} ---")
-        pdf_path = Path(doc_path)
-        if not pdf_path.exists():
+        doc_path_obj = Path(doc_path)
+        if not doc_path_obj.exists():
             logger.error(f"Document not found at {doc_path}. Skipping this document.")
             continue
 
-        loader = DocumentLoader(data_dir=str(pdf_path.parent), doc_format='pdf')
-        source_documents = [doc for doc in loader.load_and_prepare() if doc.metadata.get('filename') == pdf_path.name]
-        
+        if doc_path_obj.is_dir():
+            # HTML directory — load all .html files from the directory
+            doc_format = 'html'
+            data_dir = str(doc_path_obj)
+            filename_filter = None
+        else:
+            # Single PDF file
+            doc_format = 'pdf'
+            data_dir = str(doc_path_obj.parent)
+            filename_filter = doc_path_obj.name
+
+        loader = DocumentLoader(data_dir=data_dir, doc_format=doc_format)
+        all_docs = loader.load_and_prepare()
+        source_documents = (
+            [doc for doc in all_docs if doc.metadata.get('filename') == filename_filter]
+            if filename_filter else all_docs
+        )
+
         if not source_documents:
-            logger.error(f"Could not load the specified PDF: {pdf_path.name}. Skipping this document.")
+            logger.error(f"Could not load documents from {doc_path}. Skipping.")
             continue
 
         for chunk_strategy in chunking_strategies:
