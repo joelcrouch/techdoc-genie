@@ -222,3 +222,50 @@ def test_is_heading(line, expected):
     loader = DocumentLoader(data_dir="dummy/path") # data_dir is not used by _is_heading
     assert loader._is_heading(line) == expected
 
+
+def test_html_to_text_missing_boilerplate():
+    """Verify that _html_to_text works even if none of the filtered tags are present."""
+    html = "<html><body><h1>Only a heading</h1></body></html>"
+    loader = DocumentLoader()
+    result = loader._html_to_text(html)
+    assert result.strip() == "# Only a heading"
+
+
+def test_html_to_text_nested_tags():
+    """
+    Verify if nested tags cause duplication in the current implementation.
+    If 'find_all' is recursive, it might find both <li> and <p> content.
+    """
+    html = """
+    <html>
+        <body>
+            <ul>
+                <li><p>Nested content</p></li>
+            </ul>
+        </body>
+    </html>
+    """
+    loader = DocumentLoader()
+    result = loader._html_to_text(html)
+    
+    # If the bug exists, "Nested content" will appear twice.
+    # We want to see what actually happens.
+    occurrences = result.count("Nested content")
+    assert occurrences == 1, f"Expected 1 occurrence, found {occurrences}. Content: {result}"
+
+
+def test_html_to_text_no_body():
+    """Verify behavior when <body> is missing."""
+    html = "<html><head><title>No body</title></head></html>"
+    loader = DocumentLoader()
+    result = loader._html_to_text(html)
+    assert result == ""
+
+
+def test_html_to_text_unrelated_tags():
+    """Verify that unrelated tags in body are ignored."""
+    html = "<html><body><div><span>Not in extraction list</span></div></body></html>"
+    loader = DocumentLoader()
+    result = loader._html_to_text(html)
+    assert result == ""
+

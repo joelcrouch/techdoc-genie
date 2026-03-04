@@ -94,7 +94,7 @@ only keeps headings and body text.
 ---
 
 ## 3. Building a Vector Store
-
+3 and 4 are essentially smoke tests to make sure it works.  The real analyiss begins to happen at 5.
 Run `build_generic_vectorstore.py` to ingest documents and write a FAISS
 vector store to disk.
 

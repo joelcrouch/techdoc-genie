@@ -20,7 +20,7 @@ This system provides:
 ## Architecture
 
 ### High-Level Components
-
+This is a general idea-doesnt actaully reflect what is going on.  Currently its acli command based tool. 
 ```
 ┌─────────────┐
 │   Web UI    │ (Streamlit/Gradio)
@@ -135,7 +135,7 @@ These sources provide:
 - **Context Precision**: Retrieved chunks are relevant (target: >80%)
 - **Context Recall**: All necessary information was retrieved (target: >75%)
 
-### Performance
+### Performance  NONE of these are even close to what i am observing (end of adding metrics and about to add testing)
 - **Latency P50**: Median response time (target: <1.5s)
 - **Latency P95**: 95th percentile response time (target: <3s)
 - **Throughput**: Concurrent queries supported (target: 10 QPS)
