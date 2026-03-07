@@ -59,18 +59,31 @@ class DocumentLoader:
                 tag.decompose()
         
         lines = []
+        # Tags we want to extract
+        extraction_tags = ["h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "dt", "dd", "pre", "code"]
 
         if soup.body:
-            # Find all content elements anywhere in the document tree (handles nested divs)
-            for element in soup.body.find_all(
-                ["h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "dt", "dd"]
-            ):
-                text = element.get_text(strip=True)
+            # Find all content elements anywhere in the document tree
+            for element in soup.body.find_all(extraction_tags):
+                # Avoid duplication: if this element is inside another element we are already 
+                # extracting, skip it (the parent will include its text).
+                # We check ancestors up to the body.
+                if any(ancestor.name in extraction_tags for ancestor in element.parents if ancestor.name not in [None, 'body', '[document]']):
+                    continue
+
+                if element.name == "pre":
+                    text = element.get_text() # Keep internal whitespace for code
+                else:
+                    text = element.get_text(strip=True)
+                
                 if not text:
                     continue
+                    
                 if element.name.startswith("h"):
                     level = int(element.name[1])
                     lines.append(f"{'#' * level} {text}")
+                elif element.name == "pre":
+                    lines.append(f"```\n{text.strip()}\n```")
                 else:
                     lines.append(text)
 
