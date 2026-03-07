@@ -269,3 +269,231 @@ def test_html_to_text_unrelated_tags():
     result = loader._html_to_text(html)
     assert result == ""
 
+
+# ---------------------------------------------------------------------------
+# _clean_heading
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("## My Heading", "My Heading"),
+        ("### Sub Section", "Sub Section"),
+        ("# Top Level", "Top Level"),
+        ("1. Introduction", "Introduction"),
+        ("1.2. Sub-introduction", "Sub-introduction"),
+        ("2.3.4. Deep Nest", "Deep Nest"),
+        ("Plain heading", "Plain heading"),
+        ("  extra   spaces  ", "extra spaces"),   # leading/trailing stripped; internal kept
+        ("A" * 110, "A" * 97 + "..."),              # truncated at 100 chars
+    ],
+)
+def test_clean_heading(raw, expected):
+    loader = DocumentLoader()
+    assert loader._clean_heading(raw) == expected
+
+
+# ---------------------------------------------------------------------------
+# _create_section_document
+# ---------------------------------------------------------------------------
+
+def test_create_section_document_structure():
+    loader = DocumentLoader()
+    section = {
+        "title": "My Section",
+        "content": ["Line one", "Line two"],
+        "start_page": 3,
+    }
+    source = Path("/data/raw/docs/sample.pdf")
+    doc = loader._create_section_document(section, source, page_num=5)
+
+    assert isinstance(doc, Document)
+    assert "# My Section" in doc.page_content
+    assert "Section: My Section" in doc.page_content
+    assert "Line one" in doc.page_content
+    assert "Line two" in doc.page_content
+    assert doc.metadata["section_title"] == "My Section"
+    assert doc.metadata["start_page"] == 3
+    assert doc.metadata["end_page"] == 5
+    assert doc.metadata["filename"] == "sample.pdf"
+    assert doc.metadata["file_type"] == "pdf"
+    assert doc.metadata["doc_type"] == "postgresql_docs"
+
+
+# ---------------------------------------------------------------------------
+# _split_pdf_into_sections
+# ---------------------------------------------------------------------------
+
+def _make_page(text: str) -> Document:
+    return Document(page_content=text)
+
+
+def test_split_pdf_sections_detects_headings():
+    """Pages with headings produce separate section Documents."""
+    loader = DocumentLoader()
+    pages = [
+        _make_page("# Introduction\nThis is intro text.\nMore intro."),
+        _make_page("## Chapter Two\nChapter two body text here."),
+    ]
+    source = Path("/fake/docs.pdf")
+    sections = loader._split_pdf_into_sections(pages, source)
+
+    assert len(sections) >= 2
+    titles = [s.metadata["section_title"] for s in sections]
+    assert any("Introduction" in t for t in titles)
+    assert any("Chapter Two" in t for t in titles)
+
+
+def test_split_pdf_sections_fallback_to_pages():
+    """When no content accumulates (all lines are headings), falls back to per-page docs."""
+    loader = DocumentLoader()
+    # Every line is detected as a heading, so no content ever accumulates between them.
+    pages = [
+        _make_page("# Heading One"),
+        _make_page("# Heading Two"),
+    ]
+    source = Path("/fake/docs.pdf")
+    sections = loader._split_pdf_into_sections(pages, source)
+
+    # Fallback: one Document per page
+    assert len(sections) == len(pages)
+    assert all("section_title" in s.metadata for s in sections)
+
+
+def test_split_pdf_sections_empty_pages():
+    """Empty pages list returns empty sections list."""
+    loader = DocumentLoader()
+    sections = loader._split_pdf_into_sections([], Path("/fake/docs.pdf"))
+    assert sections == []
+
+
+# ---------------------------------------------------------------------------
+# load_pdfs
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def temp_pdf_dir(tmp_path):
+    """Directory with a single dummy PDF file."""
+    pdf_dir = tmp_path / "pdf_docs"
+    pdf_dir.mkdir()
+    (pdf_dir / "sample.pdf").write_bytes(b"%PDF-1.4 dummy")
+    return pdf_dir
+
+
+def test_load_pdfs_with_section_split(temp_pdf_dir, mocker):
+    """load_pdfs with split_pdf_sections=True calls _split_pdf_into_sections."""
+    mock_pages = [
+        Document(page_content="# Introduction\nSome intro content here."),
+        Document(page_content="## Chapter Two\nChapter two body."),
+    ]
+    mock_loader_instance = MagicMock()
+    mock_loader_instance.load.return_value = mock_pages
+    mocker.patch("src.ingestion.document_loader.PyPDFLoader", return_value=mock_loader_instance)
+
+    loader = DocumentLoader(data_dir=str(temp_pdf_dir), doc_format="pdf", split_pdf_sections=True)
+    docs = loader.load_pdfs()
+
+    assert len(docs) > 0
+    for doc in docs:
+        assert doc.metadata["filename"] == "sample.pdf"
+        assert doc.metadata["file_type"] == "pdf"
+
+
+def test_load_pdfs_without_section_split(temp_pdf_dir, mocker):
+    """load_pdfs with split_pdf_sections=False just attaches metadata to pages."""
+    mock_pages = [
+        Document(page_content="Page one content"),
+        Document(page_content="Page two content"),
+    ]
+    mock_loader_instance = MagicMock()
+    mock_loader_instance.load.return_value = mock_pages
+    mocker.patch("src.ingestion.document_loader.PyPDFLoader", return_value=mock_loader_instance)
+
+    loader = DocumentLoader(data_dir=str(temp_pdf_dir), doc_format="pdf", split_pdf_sections=False)
+    docs = loader.load_pdfs()
+
+    assert len(docs) == 2
+    for doc in docs:
+        assert doc.metadata["filename"] == "sample.pdf"
+        assert doc.metadata["file_type"] == "pdf"
+
+
+def test_load_pdfs_empty_directory(tmp_path):
+    """load_pdfs returns empty list when directory has no PDFs."""
+    empty_dir = tmp_path / "no_pdfs"
+    empty_dir.mkdir()
+    loader = DocumentLoader(data_dir=str(empty_dir), doc_format="pdf")
+    docs = loader.load_pdfs()
+    assert docs == []
+
+
+# ---------------------------------------------------------------------------
+# load_auto
+# ---------------------------------------------------------------------------
+
+def test_load_auto_combines_html_and_pdf(mocker):
+    """load_auto calls both load_html and load_pdfs and returns combined results."""
+    html_doc = Document(page_content="HTML content", metadata={})
+    pdf_doc = Document(page_content="PDF content", metadata={})
+
+    loader = DocumentLoader()
+    mocker.patch.object(loader, "load_html", return_value=[html_doc])
+    mocker.patch.object(loader, "load_pdfs", return_value=[pdf_doc])
+
+    docs = loader.load_auto()
+    assert len(docs) == 2
+    assert html_doc in docs
+    assert pdf_doc in docs
+
+
+# ---------------------------------------------------------------------------
+# load_directory
+# ---------------------------------------------------------------------------
+
+def test_load_directory_uses_provided_path(tmp_path, mocker):
+    """load_directory temporarily overrides data_dir and calls load_and_prepare."""
+    html_dir = tmp_path / "html_docs"
+    html_dir.mkdir()
+    (html_dir / "doc.html").write_text("<html><body><h1>Hi</h1></body></html>")
+
+    loader = DocumentLoader(data_dir="original/path", doc_format="html")
+    docs = loader.load_directory(str(html_dir))
+
+    assert len(docs) == 1
+    # data_dir restored after call
+    assert loader.data_dir == Path("original/path")
+
+
+# ---------------------------------------------------------------------------
+# load_and_prepare
+# ---------------------------------------------------------------------------
+
+def test_load_and_prepare_html(mocker):
+    loader = DocumentLoader(doc_format="html")
+    mock_load = mocker.patch.object(loader, "load_html", return_value=[])
+    loader.load_and_prepare()
+    mock_load.assert_called_once()
+
+
+def test_load_and_prepare_pdf(mocker):
+    loader = DocumentLoader(doc_format="pdf")
+    mock_load = mocker.patch.object(loader, "load_pdfs", return_value=[])
+    loader.load_and_prepare()
+    mock_load.assert_called_once()
+
+
+def test_load_and_prepare_auto(mocker):
+    loader = DocumentLoader(doc_format="auto")
+    mock_load = mocker.patch.object(loader, "load_auto", return_value=[])
+    loader.load_and_prepare()
+    mock_load.assert_called_once()
+
+
+def test_load_and_prepare_invalid_format():
+    loader = DocumentLoader.__new__(DocumentLoader)
+    loader.data_dir = Path("dummy")
+    loader.doc_format = "xml"
+    loader.split_pdf_sections = True
+    with pytest.raises(ValueError, match="Unsupported doc_format"):
+        loader.load_and_prepare()
+
