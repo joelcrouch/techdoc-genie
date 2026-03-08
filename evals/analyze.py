@@ -70,6 +70,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from evals.metrics.faithfulness import FaithfulnessScorer
 from evals.metrics.context_metrics import ContextMetricsScorer, ContextMetricsResult
+from evals.metrics.correctness import CorrectnessScorer
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -92,6 +93,7 @@ def _compute_metrics_for_record(
     sim_model: SentenceTransformer,
     context_scorer: ContextMetricsScorer,
     faithfulness_scorer: Optional[FaithfulnessScorer],
+    correctness_scorer: Optional[CorrectnessScorer],
     throttle_s: float,
 ) -> Dict[str, Any]:
     """
@@ -155,6 +157,24 @@ def _compute_metrics_for_record(
     else:
         metrics["faithfulness_score"] = None
 
+    # ---- correctness (LLM-as-judge, optional) -------------------------------
+    if correctness_scorer is not None and answer and ground_truth and not is_error:
+        try:
+            cr = correctness_scorer.score(
+                llm_answer=answer,
+                ground_truth=ground_truth,
+            )
+            metrics.update(cr.as_dict())
+        except Exception as exc:
+            logger.warning(f"  correctness failed for {rec.get('query_id')}: {exc}")
+            metrics["correctness_score"] = None
+            metrics["correctness_error"] = str(exc)
+
+        if throttle_s > 0:
+            time.sleep(throttle_s)
+    else:
+        metrics["correctness_score"] = None
+
     return metrics
 
 
@@ -170,6 +190,8 @@ def _summarize(annotated: List[Dict]) -> Dict[str, Any]:
     faith_scores = [r["metrics"].get("faithfulness_score") for r in non_error]
     precision_scores = [r["metrics"].get("context_precision") for r in non_error]
     recall_scores = [r["metrics"].get("context_recall") for r in non_error]
+    ap_scores = [r["metrics"].get("average_precision") for r in non_error]
+    correctness_scores = [r["metrics"].get("correctness_score") for r in non_error]
     latencies = [r.get("llm_response_time_s") for r in annotated if r.get("llm_response_time_s")]
 
     # Slice by difficulty
@@ -181,7 +203,9 @@ def _summarize(annotated: List[Dict]) -> Dict[str, Any]:
             "avg_semantic_similarity": _avg([r["metrics"].get("semantic_similarity") for r in subset]),
             "avg_context_precision": _avg([r["metrics"].get("context_precision") for r in subset]),
             "avg_context_recall": _avg([r["metrics"].get("context_recall") for r in subset]),
+            "avg_average_precision": _avg([r["metrics"].get("average_precision") for r in subset]),
             "avg_faithfulness": _avg([r["metrics"].get("faithfulness_score") for r in subset]),
+            "avg_correctness": _avg([r["metrics"].get("correctness_score") for r in subset]),
         }
 
     # Slice by category
@@ -194,7 +218,9 @@ def _summarize(annotated: List[Dict]) -> Dict[str, Any]:
             "avg_semantic_similarity": _avg([r["metrics"].get("semantic_similarity") for r in subset]),
             "avg_context_precision": _avg([r["metrics"].get("context_precision") for r in subset]),
             "avg_context_recall": _avg([r["metrics"].get("context_recall") for r in subset]),
+            "avg_average_precision": _avg([r["metrics"].get("average_precision") for r in subset]),
             "avg_faithfulness": _avg([r["metrics"].get("faithfulness_score") for r in subset]),
+            "avg_correctness": _avg([r["metrics"].get("correctness_score") for r in subset]),
         }
 
     return {
@@ -204,7 +230,9 @@ def _summarize(annotated: List[Dict]) -> Dict[str, Any]:
         "avg_semantic_similarity": _avg(sem_scores),
         "avg_context_precision": _avg(precision_scores),
         "avg_context_recall": _avg(recall_scores),
+        "avg_average_precision": _avg(ap_scores),
         "avg_faithfulness": _avg(faith_scores),
+        "avg_correctness": _avg(correctness_scores),
         "avg_latency_s": _avg(latencies),
         "answer_rate_pct": round(len(non_error) / len(annotated) * 100, 1) if annotated else 0.0,
         "by_difficulty": by_difficulty,
@@ -217,6 +245,7 @@ def analyze_file(
     sim_model: SentenceTransformer,
     context_scorer: ContextMetricsScorer,
     faithfulness_scorer: Optional[FaithfulnessScorer],
+    correctness_scorer: Optional[CorrectnessScorer] = None,
     throttle_s: float = 0.0,
     overwrite: bool = False,
 ) -> Optional[Path]:
@@ -245,7 +274,7 @@ def analyze_file(
     for rec in tqdm(results, desc=f"  {raw_path.stem[:60]}", unit="q", leave=False):
         rec = dict(rec)  # don't mutate original
         rec["metrics"] = _compute_metrics_for_record(
-            rec, sim_model, context_scorer, faithfulness_scorer, throttle_s
+            rec, sim_model, context_scorer, faithfulness_scorer, correctness_scorer, throttle_s
         )
         annotated.append(rec)
 
@@ -389,6 +418,7 @@ def _print_cross_experiment_summary(analyzed_paths: List[Path]) -> None:
 def run_analysis(
     input_paths: List[Path],
     skip_faithfulness: bool = False,
+    skip_correctness: bool = False,
     judge_model: Optional[str] = None,
     judge_timeout: int = 60,
     throttle_s: float = 0.0,
@@ -404,6 +434,27 @@ def run_analysis(
     logger.info(f"Loading SentenceTransformer: {SIMILARITY_MODEL}")
     sim_model = SentenceTransformer(SIMILARITY_MODEL)
     context_scorer = ContextMetricsScorer(sim_model)
+
+    # Optionally init correctness scorer
+    correctness_scorer: Optional[CorrectnessScorer] = None
+    if not skip_correctness:
+        try:
+            kwargs_c: Dict[str, Any] = {"judge_timeout": judge_timeout}
+            if judge_model:
+                kwargs_c["judge_model"] = judge_model
+            correctness_scorer = CorrectnessScorer(**kwargs_c)
+            logger.info(
+                f"CorrectnessScorer ready "
+                f"(model={judge_model or 'default'}, timeout={judge_timeout}s)"
+            )
+        except Exception as exc:
+            logger.warning(
+                f"Could not init CorrectnessScorer ({exc}). "
+                f"Correctness will be skipped. "
+                f"Is Ollama running? Try: ollama serve"
+            )
+    else:
+        logger.info("Correctness scoring disabled (--skip-correctness).")
 
     # Optionally init faithfulness scorer
     faithfulness_scorer: Optional[FaithfulnessScorer] = None
@@ -433,6 +484,7 @@ def run_analysis(
             sim_model=sim_model,
             context_scorer=context_scorer,
             faithfulness_scorer=faithfulness_scorer,
+            correctness_scorer=correctness_scorer,
             throttle_s=throttle_s,
             overwrite=overwrite,
         )
@@ -470,6 +522,14 @@ if __name__ == "__main__":
         help=(
             "Skip the LLM-as-judge faithfulness step.  "
             "Semantic similarity is still computed (fast, CPU-only)."
+        ),
+    )
+    parser.add_argument(
+        "--skip-correctness",
+        action="store_true",
+        help=(
+            "Skip the LLM-as-judge correctness step.  "
+            "Use this with --skip-faithfulness to run fast, CPU-only analysis."
         ),
     )
     parser.add_argument(
@@ -527,6 +587,7 @@ if __name__ == "__main__":
     run_analysis(
         input_paths=raw_files,
         skip_faithfulness=args.skip_faithfulness,
+        skip_correctness=args.skip_correctness,
         judge_model=args.judge_model,
         judge_timeout=args.judge_timeout,
         throttle_s=args.throttle,

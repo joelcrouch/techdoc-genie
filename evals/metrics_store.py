@@ -52,7 +52,7 @@ from src.utils.logger import setup_logger
 
 # Re-use the same failure mode classifier so the store stays consistent
 # with what diagnose.py reports.
-from evals.diagnose import classify
+from evals.diagnose import classify, classify_advanced as _classify_advanced
 
 logger = setup_logger(__name__)
 
@@ -86,7 +86,9 @@ CREATE TABLE IF NOT EXISTS runs (
     avg_semantic_similarity REAL,
     avg_context_precision   REAL,
     avg_context_recall      REAL,
+    avg_average_precision   REAL,
     avg_faithfulness        REAL,
+    avg_correctness         REAL,
     avg_latency_s           REAL,
     answer_rate_pct         REAL
 );
@@ -103,9 +105,14 @@ CREATE TABLE IF NOT EXISTS query_results (
     semantic_similarity REAL,
     context_precision   REAL,
     context_recall      REAL,
+    average_precision   REAL,
     faithfulness_score  REAL,
+    correctness_score   REAL,
+    factual_accuracy    REAL,
+    completeness        REAL,
     latency_s           REAL,
     failure_mode        TEXT,
+    actionable_advice   TEXT,
     error               TEXT
 );
 
@@ -138,7 +145,30 @@ class MetricsStore:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._conn() as conn:
             conn.executescript(_DDL)
+            self._migrate(conn)
         logger.debug(f"MetricsStore ready: {db_path}")
+
+    def _migrate(self, conn: sqlite3.Connection) -> None:
+        """Add columns introduced after the initial schema, if not already present."""
+        new_columns = {
+            "runs": [
+                ("avg_average_precision", "REAL"),
+                ("avg_correctness",       "REAL"),
+            ],
+            "query_results": [
+                ("average_precision",  "REAL"),
+                ("correctness_score",  "REAL"),
+                ("factual_accuracy",   "REAL"),
+                ("completeness",       "REAL"),
+                ("actionable_advice",  "TEXT"),
+            ],
+        }
+        for table, cols in new_columns.items():
+            existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+            for col_name, col_type in cols:
+                if col_name not in existing:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
+                    logger.info(f"Migration: added {table}.{col_name}")
 
     # ------------------------------------------------------------------ #
     # Connection helper                                                    #
@@ -200,7 +230,8 @@ class MetricsStore:
                     :embedder_provider, :embedder_model,
                     :n_queries, :n_errors,
                     :avg_semantic_similarity, :avg_context_precision,
-                    :avg_context_recall, :avg_faithfulness,
+                    :avg_context_recall, :avg_average_precision, :avg_faithfulness,
+                    :avg_correctness,
                     :avg_latency_s, :answer_rate_pct
                 )""",
                 {
@@ -221,7 +252,9 @@ class MetricsStore:
                     "avg_semantic_similarity": summary.get("avg_semantic_similarity"),
                     "avg_context_precision":   summary.get("avg_context_precision"),
                     "avg_context_recall":      summary.get("avg_context_recall"),
+                    "avg_average_precision":   summary.get("avg_average_precision"),
                     "avg_faithfulness":        summary.get("avg_faithfulness"),
+                    "avg_correctness":         summary.get("avg_correctness"),
                     "avg_latency_s":           summary.get("avg_latency_s"),
                     "answer_rate_pct":         summary.get("answer_rate_pct"),
                 },
@@ -230,8 +263,10 @@ class MetricsStore:
             rows = []
             for rec in data.get("results", []):
                 m = rec.get("metrics", {})
-                sem   = m.get("semantic_similarity")
-                recall= m.get("context_recall")
+                sem        = m.get("semantic_similarity")
+                recall     = m.get("context_recall")
+                faith      = m.get("faithfulness_score")
+                correctness= m.get("correctness_score")
                 rows.append({
                     "run_id":              run_id,
                     "query_id":            rec.get("query_id"),
@@ -243,9 +278,14 @@ class MetricsStore:
                     "semantic_similarity": sem,
                     "context_precision":   m.get("context_precision"),
                     "context_recall":      recall,
-                    "faithfulness_score":  m.get("faithfulness_score"),
+                    "average_precision":   m.get("average_precision"),
+                    "faithfulness_score":  faith,
+                    "correctness_score":   correctness,
+                    "factual_accuracy":    m.get("factual_accuracy"),
+                    "completeness":        m.get("completeness"),
                     "latency_s":           rec.get("llm_response_time_s"),
                     "failure_mode":        classify(sem, recall),
+                    "actionable_advice":   _classify_advanced(faith, correctness),
                     "error":               rec.get("error"),
                 })
 
@@ -254,12 +294,16 @@ class MetricsStore:
                     run_id, query_id, query, category, difficulty,
                     ground_truth, llm_answer,
                     semantic_similarity, context_precision, context_recall,
-                    faithfulness_score, latency_s, failure_mode, error
+                    average_precision, faithfulness_score,
+                    correctness_score, factual_accuracy, completeness,
+                    latency_s, failure_mode, actionable_advice, error
                 ) VALUES (
                     :run_id, :query_id, :query, :category, :difficulty,
                     :ground_truth, :llm_answer,
                     :semantic_similarity, :context_precision, :context_recall,
-                    :faithfulness_score, :latency_s, :failure_mode, :error
+                    :average_precision, :faithfulness_score,
+                    :correctness_score, :factual_accuracy, :completeness,
+                    :latency_s, :failure_mode, :actionable_advice, :error
                 )""",
                 rows,
             )
@@ -320,7 +364,8 @@ class MetricsStore:
         """
         allowed = {
             "avg_semantic_similarity", "avg_context_precision",
-            "avg_context_recall", "avg_faithfulness", "avg_latency_s",
+            "avg_context_recall", "avg_average_precision",
+            "avg_faithfulness", "avg_correctness", "avg_latency_s",
         }
         if metric not in allowed:
             raise ValueError(f"metric must be one of {allowed}")
@@ -385,12 +430,14 @@ class MetricsStore:
                 _f(r["avg_semantic_similarity"]),
                 _f(r["avg_context_precision"]),
                 _f(r["avg_context_recall"]),
+                _f(r["avg_average_precision"]),
                 _f(r["avg_faithfulness"]),
+                _f(r["avg_correctness"]),
                 r["n_queries"],
             ])
         print(tabulate(
             table,
-            headers=["Run at", "LLM", "Strategy", "Sem.Sim", "Ctx.Prec", "Ctx.Rec", "Faithful", "N"],
+            headers=["Run at", "LLM", "Strategy", "Sem.Sim", "Ctx.Prec", "Ctx.Rec", "MAP", "Faithful", "Correct", "N"],
             tablefmt="simple",
         ))
 

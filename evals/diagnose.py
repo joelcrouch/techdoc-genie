@@ -95,6 +95,63 @@ FAILURE_MODE_ADVICE = {
 
 
 # ---------------------------------------------------------------------------
+# Advanced: Faithfulness × Correctness matrix
+# ---------------------------------------------------------------------------
+
+FAITH_HIGH    = 0.5   # faithfulness >= this → "grounded in context"
+CORRECT_HIGH  = 0.5   # correctness  >= this → "answer is correct"
+
+ACTIONABLE_ADVICE = {
+    "OK":             "Answer is grounded and correct — no action needed.",
+    "KNOWLEDGE_GAP":  (
+        "LLM followed the docs but the answer is wrong — "
+        "your source documents may contain incorrect or outdated information."
+    ),
+    "PROMPT_FAILURE": (
+        "Answer is correct but not grounded in context — "
+        "the LLM may be using prior knowledge instead of the retrieved docs. "
+        "Add 'answer only from the provided context' to your system prompt."
+    ),
+    "RETRIEVAL_GAP":  (
+        "Both faithfulness and correctness are low — "
+        "the relevant content was not retrieved. "
+        "Improve chunking strategy, increase k, or use a better embedding model."
+    ),
+    "NO_DATA":        "Faithfulness and/or correctness not scored — re-run without --skip-faithfulness/--skip-correctness.",
+}
+
+ACTIONABLE_ADVICE_ORDER = ["OK", "KNOWLEDGE_GAP", "PROMPT_FAILURE", "RETRIEVAL_GAP", "NO_DATA"]
+
+
+def classify_advanced(
+    faithfulness: Optional[float],
+    correctness: Optional[float],
+) -> str:
+    """
+    Map the intersection of Faithfulness and Correctness to an actionable label.
+
+    Matrix
+    ------
+      Faith ≥ 0.5, Correct ≥ 0.5  → OK
+      Faith ≥ 0.5, Correct < 0.5  → KNOWLEDGE_GAP
+      Faith < 0.5, Correct ≥ 0.5  → PROMPT_FAILURE
+      Faith < 0.5, Correct < 0.5  → RETRIEVAL_GAP
+      Either None                  → NO_DATA
+    """
+    if faithfulness is None or correctness is None:
+        return "NO_DATA"
+    faith_high   = faithfulness >= FAITH_HIGH
+    correct_high = correctness  >= CORRECT_HIGH
+    if faith_high and correct_high:
+        return "OK"
+    if faith_high and not correct_high:
+        return "KNOWLEDGE_GAP"
+    if not faith_high and correct_high:
+        return "PROMPT_FAILURE"
+    return "RETRIEVAL_GAP"
+
+
+# ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
 
@@ -116,10 +173,11 @@ def load_records(analyzed_dir: Path) -> List[Dict[str, Any]]:
         exp_label = f"{meta.get('llm_provider')}/{meta.get('llm_model_id')} × {meta.get('chunking_strategy')}"
         for rec in data.get("results", []):
             m = rec.get("metrics", {})
-            sem   = m.get("semantic_similarity")
-            prec  = m.get("context_precision")
-            recall= m.get("context_recall")
-            faith = m.get("faithfulness_score")
+            sem         = m.get("semantic_similarity")
+            prec        = m.get("context_precision")
+            recall      = m.get("context_recall")
+            faith       = m.get("faithfulness_score")
+            correctness = m.get("correctness_score")
             records.append({
                 # experiment
                 "exp_label":  exp_label,
@@ -135,13 +193,18 @@ def load_records(analyzed_dir: Path) -> List[Dict[str, Any]]:
                 "llm_answer": rec.get("llm_answer", ""),
                 "error":      rec.get("error"),
                 # metrics
-                "sem_sim":    sem,
-                "ctx_prec":   prec,
-                "ctx_rec":    recall,
-                "faithfulness": faith,
-                "latency_s":  rec.get("llm_response_time_s"),
+                "sem_sim":         sem,
+                "ctx_prec":        prec,
+                "ctx_rec":         recall,
+                "avg_prec":        m.get("average_precision"),
+                "faithfulness":    faith,
+                "correctness":     correctness,
+                "factual_accuracy": m.get("factual_accuracy"),
+                "completeness":    m.get("completeness"),
+                "latency_s":       rec.get("llm_response_time_s"),
                 # derived
-                "failure_mode": classify(sem, recall),
+                "failure_mode":    classify(sem, recall),
+                "actionable_advice": classify_advanced(faith, correctness),
             })
     return records
 
@@ -388,6 +451,75 @@ def report_query_deep_dive(records: List[Dict], query_id: str) -> None:
     ))
 
 
+def report_faithfulness_correctness_matrix(records: List[Dict]) -> None:
+    """
+    Breakdown of the Faithfulness × Correctness actionable advice matrix.
+
+    Each query×experiment is classified into one of four quadrants:
+      OK             — grounded and correct
+      KNOWLEDGE_GAP  — grounded but wrong (bad source docs)
+      PROMPT_FAILURE — correct but not grounded (LLM using prior knowledge)
+      RETRIEVAL_GAP  — neither grounded nor correct (retrieval problem)
+      NO_DATA        — faithfulness or correctness not scored
+    """
+    advice_counts: Dict[str, int] = defaultdict(int)
+    for r in records:
+        advice_counts[r["actionable_advice"]] += 1
+
+    total = len(records)
+    scored = total - advice_counts.get("NO_DATA", 0)
+
+    print(f"\n{'='*70}")
+    print("  FAITHFULNESS × CORRECTNESS — ACTIONABLE ADVICE MATRIX")
+    print(f"{'='*70}")
+
+    if scored == 0:
+        print("  No records have both faithfulness and correctness scores.")
+        print("  Re-run analyze.py without --skip-faithfulness and --skip-correctness.")
+        return
+
+    rows = []
+    for advice in ACTIONABLE_ADVICE_ORDER:
+        n = advice_counts.get(advice, 0)
+        if n == 0:
+            continue
+        pct = f"{n/total*100:.1f}%"
+        rows.append([advice, n, pct, ACTIONABLE_ADVICE[advice]])
+
+    print(tabulate(rows, headers=["Advice", "N", "%", "What to do"], tablefmt="simple"))
+
+    # Per-category breakdown if enough data
+    scored_records = [r for r in records if r["actionable_advice"] != "NO_DATA"]
+    if not scored_records:
+        return
+
+    cats: Dict[str, List[Dict]] = defaultdict(list)
+    for r in scored_records:
+        cats[r["category"]].append(r)
+
+    if len(cats) > 1:
+        print("\nBreakdown by category (scored records only):")
+        cat_rows = []
+        for cat in sorted(cats):
+            subset = cats[cat]
+            dominant = max(
+                ACTIONABLE_ADVICE_ORDER[:-1],  # exclude NO_DATA
+                key=lambda a: sum(1 for r in subset if r["actionable_advice"] == a),
+            )
+            cat_rows.append([
+                cat,
+                len(subset),
+                _fmt(_avg(r["faithfulness"] for r in subset if r["faithfulness"] is not None)),
+                _fmt(_avg(r["correctness"]  for r in subset if r["correctness"]  is not None)),
+                dominant,
+            ])
+        print(tabulate(
+            cat_rows,
+            headers=["Category", "N", "Avg Faith", "Avg Correct", "Dominant Advice"],
+            tablefmt="simple",
+        ))
+
+
 def report_experiment_comparison(records: List[Dict]) -> None:
     """Cross-experiment summary sorted by avg semantic similarity."""
     by_exp: Dict[str, List[Dict]] = defaultdict(list)
@@ -405,6 +537,7 @@ def report_experiment_comparison(records: List[Dict]) -> None:
             _fmt(avg_sem),
             _fmt(_avg(r["ctx_prec"] for r in recs)),
             _fmt(_avg(r["ctx_rec"] for r in recs)),
+            _fmt(_avg(r["avg_prec"] for r in recs)),
             _mode_bar(mode_counts, len(recs)),
         ])
     rows.sort(key=lambda x: x[1], reverse=True)
@@ -414,7 +547,7 @@ def report_experiment_comparison(records: List[Dict]) -> None:
     print(f"{'='*70}")
     print(tabulate(
         rows,
-        headers=["Experiment", "Avg Sem.Sim", "Avg Ctx.Prec", "Avg Ctx.Rec", "Failure modes"],
+        headers=["Experiment", "Avg Sem.Sim", "Avg Ctx.Prec", "Avg Ctx.Rec", "MAP", "Failure modes"],
         tablefmt="simple",
     ))
 
@@ -451,6 +584,7 @@ def run_diagnose(
         return
 
     report_overview(records)
+    report_faithfulness_correctness_matrix(records)
     report_by_difficulty(records)
     report_by_category(records)
     report_experiment_comparison(records)

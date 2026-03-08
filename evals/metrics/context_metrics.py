@@ -102,6 +102,21 @@ class ContextMetricsResult:
     best_chunk_index: Optional[int] = None
     """Index (0-based) of the chunk most similar to the ground truth."""
 
+    average_precision: Optional[float] = None
+    """
+    Average Precision (AP) — rank-aware retrieval quality score (0–1).
+
+    Unlike context_precision which treats all positions equally, AP penalises
+    relevant chunks found further down the ranked list.  A relevant chunk at
+    rank 1 contributes more than the same chunk at rank 5.
+
+    Aggregate AP across queries to get Mean Average Precision (MAP).
+
+    AP = Σ_k (Precision@k × relevance_k) / total_relevant_retrieved
+    where relevance_k = 1 if the chunk at position k is relevant, else 0.
+    Returns 0.0 when no chunks are relevant, None on error.
+    """
+
     error: Optional[str] = None
 
     def as_dict(self) -> dict:
@@ -112,6 +127,7 @@ class ContextMetricsResult:
             "chunk_relevance_scores": self.chunk_relevance_scores,
             "context_recall": self.context_recall,
             "best_chunk_index": self.best_chunk_index,
+            "average_precision": self.average_precision,
             "context_metrics_error": self.error,
         }
 
@@ -181,8 +197,23 @@ class ContextMetricsScorer:
             # ---- precision: query vs each chunk ----------------------------
             q_chunk_sims = cosine_similarity(query_emb, chunk_embs)[0]  # (N,)
             chunk_relevance_scores = [float(s) for s in q_chunk_sims]
-            n_relevant = int(np.sum(q_chunk_sims >= self.precision_threshold))
+            relevance_flags = [s >= self.precision_threshold for s in q_chunk_sims]
+            n_relevant = int(sum(relevance_flags))
             context_precision = n_relevant / len(chunk_texts)
+
+            # ---- average precision (rank-aware) ----------------------------
+            # AP = Σ_k (Precision@k * relevance_k) / total_relevant_retrieved
+            # Penalises relevant chunks found at lower ranks.
+            if n_relevant == 0:
+                average_precision = 0.0
+            else:
+                running_relevant = 0
+                ap_sum = 0.0
+                for k, is_relevant in enumerate(relevance_flags, start=1):
+                    if is_relevant:
+                        running_relevant += 1
+                        ap_sum += running_relevant / k  # Precision@k
+                average_precision = ap_sum / n_relevant
 
             # ---- recall: ground truth vs each chunk ------------------------
             gt_chunk_sims = cosine_similarity(gt_emb, chunk_embs)[0]   # (N,)
@@ -196,6 +227,7 @@ class ContextMetricsScorer:
                 chunk_relevance_scores=chunk_relevance_scores,
                 context_recall=context_recall,
                 best_chunk_index=best_chunk_index,
+                average_precision=average_precision,
             )
 
         except Exception as exc:
@@ -244,6 +276,8 @@ if __name__ == "__main__":
 
     print(f"\nContext Precision : {result.context_precision:.3f}  "
           f"({result.n_relevant}/{result.n_retrieved} chunks relevant)")
+    print(f"Average Precision : {result.average_precision:.3f}  "
+          f"(rank-aware; MAP across queries is mean of this)")
     print(f"Context Recall    : {result.context_recall:.3f}  "
           f"(best match: chunk {result.best_chunk_index})")
     print("\nPer-chunk relevance scores (vs query):")

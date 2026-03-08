@@ -179,6 +179,48 @@ with tab_overview:
                 if n > 0:
                     st.markdown(f"**{icon} {mode}** ({n}): {text}")
 
+    # Faithfulness × Correctness actionable advice matrix
+    if "actionable_advice" in filtered_qr.columns and filtered_qr["actionable_advice"].notna().any():
+        st.divider()
+        st.subheader("Faithfulness × Correctness — Actionable Advice")
+
+        advice_labels = {
+            "OK":             ("✅", "Answer is grounded and correct — no action needed."),
+            "KNOWLEDGE_GAP":  ("📚", "LLM followed the docs but answer is wrong — check source data quality."),
+            "PROMPT_FAILURE": ("⚙️", "Answer correct but not grounded — LLM using prior knowledge. Tune system prompt."),
+            "RETRIEVAL_GAP":  ("🔍", "Both faithfulness and correctness low — fix chunking, embedding, or increase k."),
+            "NO_DATA":        ("⬜", "Faithfulness/Correctness not scored — re-run without skip flags."),
+        }
+        advice_order = ["OK", "KNOWLEDGE_GAP", "PROMPT_FAILURE", "RETRIEVAL_GAP", "NO_DATA"]
+
+        advice_counts = filtered_qr["actionable_advice"].value_counts().reset_index()
+        advice_counts.columns = ["Advice", "Count"]
+
+        col_adv_pie, col_adv_text = st.columns([1, 1])
+
+        with col_adv_pie:
+            adv_colors = ["#2ecc71", "#e67e22", "#3498db", "#e74c3c", "#bdc3c7"]
+            fig_adv = px.pie(
+                advice_counts,
+                names="Advice",
+                values="Count",
+                hole=0.45,
+                category_orders={"Advice": advice_order},
+                color="Advice",
+                color_discrete_sequence=adv_colors,
+                title="Faithfulness × Correctness Distribution",
+            )
+            fig_adv.update_traces(textposition="inside", textinfo="percent+label")
+            st.plotly_chart(fig_adv, use_container_width=True)
+
+        with col_adv_text:
+            st.markdown("**What to fix:**")
+            for adv in advice_order:
+                n = advice_counts[advice_counts["Advice"] == adv]["Count"].sum()
+                if n > 0:
+                    icon, text = advice_labels[adv]
+                    st.markdown(f"**{icon} {adv}** ({n}): {text}")
+
 # ===========================================================================
 # Tab 2 — By Experiment
 # ===========================================================================
@@ -189,12 +231,14 @@ with tab_experiment:
     if filtered_runs.empty:
         st.warning("No experiments match the current filters.")
     else:
-        metrics = ["avg_semantic_similarity", "avg_context_precision", "avg_context_recall", "avg_faithfulness"]
+        metrics = ["avg_semantic_similarity", "avg_context_precision", "avg_context_recall", "avg_average_precision", "avg_faithfulness", "avg_correctness"]
         metric_labels = {
             "avg_semantic_similarity": "Avg Semantic Similarity",
             "avg_context_precision":   "Avg Context Precision",
             "avg_context_recall":      "Avg Context Recall",
+            "avg_average_precision":   "Avg MAP (rank-aware precision)",
             "avg_faithfulness":        "Avg Faithfulness",
+            "avg_correctness":         "Avg Correctness (LLM-as-judge)",
         }
 
         selected_metric = st.selectbox(
@@ -222,8 +266,8 @@ with tab_experiment:
         # Summary table
         st.subheader("Full comparison table")
         display_cols = ["llm", "chunking_strategy", "avg_semantic_similarity",
-                        "avg_context_precision", "avg_context_recall",
-                        "avg_faithfulness", "avg_latency_s", "answer_rate_pct", "n_queries"]
+                        "avg_context_precision", "avg_context_recall", "avg_average_precision",
+                        "avg_faithfulness", "avg_correctness", "avg_latency_s", "answer_rate_pct", "n_queries"]
         available = [c for c in display_cols if c in filtered_runs.columns]
         st.dataframe(
             filtered_runs[available]
@@ -233,7 +277,9 @@ with tab_experiment:
                 "avg_semantic_similarity": "{:.4f}",
                 "avg_context_precision":   "{:.4f}",
                 "avg_context_recall":      "{:.4f}",
+                "avg_average_precision":   lambda v: f"{v:.4f}" if pd.notna(v) else "N/A",
                 "avg_faithfulness":        lambda v: f"{v:.4f}" if pd.notna(v) else "N/A",
+                "avg_correctness":         lambda v: f"{v:.4f}" if pd.notna(v) else "N/A",
                 "avg_latency_s":           lambda v: f"{v:.1f}s" if pd.notna(v) else "N/A",
                 "answer_rate_pct":         "{:.1f}%",
             }),
@@ -257,6 +303,8 @@ with tab_category:
                 avg_sem_sim=("semantic_similarity", "mean"),
                 avg_ctx_rec=("context_recall", "mean"),
                 avg_ctx_prec=("context_precision", "mean"),
+                avg_map=("average_precision", "mean"),
+                avg_correctness=("correctness_score", "mean"),
             )
             .reset_index()
             .sort_values("avg_sem_sim", ascending=False)
@@ -266,9 +314,12 @@ with tab_category:
 
         with col_bar:
             fig = go.Figure()
-            fig.add_bar(name="Sem. Similarity", x=cat_agg["category"], y=cat_agg["avg_sem_sim"], marker_color="#3498db")
-            fig.add_bar(name="Context Recall",  x=cat_agg["category"], y=cat_agg["avg_ctx_rec"],  marker_color="#2ecc71")
-            fig.add_bar(name="Context Precision",x=cat_agg["category"],y=cat_agg["avg_ctx_prec"], marker_color="#f39c12")
+            fig.add_bar(name="Sem. Similarity", x=cat_agg["category"], y=cat_agg["avg_sem_sim"],     marker_color="#3498db")
+            fig.add_bar(name="Context Recall",  x=cat_agg["category"], y=cat_agg["avg_ctx_rec"],     marker_color="#2ecc71")
+            fig.add_bar(name="Context Precision",x=cat_agg["category"],y=cat_agg["avg_ctx_prec"],    marker_color="#f39c12")
+            fig.add_bar(name="MAP",              x=cat_agg["category"], y=cat_agg["avg_map"],         marker_color="#9b59b6")
+            if "avg_correctness" in cat_agg.columns:
+                fig.add_bar(name="Correctness",  x=cat_agg["category"], y=cat_agg["avg_correctness"], marker_color="#e74c3c")
             fig.update_layout(barmode="group", title="Metrics by Category", xaxis_tickangle=-30)
             st.plotly_chart(fig, use_container_width=True)
 
@@ -434,7 +485,7 @@ with tab_timeseries:
     else:
         metric_choice = st.selectbox(
             "Metric",
-            ["avg_semantic_similarity", "avg_context_precision", "avg_context_recall", "avg_faithfulness"],
+            ["avg_semantic_similarity", "avg_context_precision", "avg_context_recall", "avg_average_precision", "avg_faithfulness", "avg_correctness"],
             format_func=lambda x: x.replace("avg_", "").replace("_", " ").title(),
         )
 
